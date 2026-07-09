@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --card: #ffffff;
+  --line: rgba(0, 0, 0, 0.08);
+  --text: #18181b;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --accent: #4f46e5;
+  --accent-soft: rgba(79, 70, 229, 0.1);
+  --green: #16a34a;
+  --green-soft: #dcfce7;
+  --red: #dc2626;
+  --red-soft: #fee2e2;
+  --amber: #d97706;
+  --amber-soft: #fef3c7;
+  --cat-logic: #2563eb;
+  --cat-memory: #9333ea;
+  --cat-debugging: #d97706;
+  --cat-math: #16a34a;
+  --cat-reading: #0d9488;
+  --cat-attention: #db2777;
+}
+
+.dark {
+  --bg: #0a0a0b;
+  --surface: #101012;
+  --card: #151518;
+  --line: rgba(255, 255, 255, 0.07);
+  --text: #ececee;
+  --muted: #9d9da6;
+  --faint: #5b5b64;
+  --accent: #7c86e8;
+  --accent-soft: rgba(124, 134, 232, 0.12);
+  --green: #4ade80;
+  --green-soft: rgba(34, 197, 94, 0.14);
+  --red: #f87171;
+  --red-soft: rgba(239, 68, 68, 0.14);
+  --amber: #fbbf24;
+  --amber-soft: rgba(245, 158, 11, 0.14);
+  --cat-logic: #60a5fa;
+  --cat-memory: #c084fc;
+  --cat-debugging: #fbbf24;
+  --cat-math: #4ade80;
+  --cat-reading: #2dd4bf;
+  --cat-attention: #f472b6;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--green);
+  --color-good-soft: var(--green-soft);
+  --color-bad: var(--red);
+  --color-bad-soft: var(--red-soft);
+  --color-warn: var(--amber);
+  --color-warn-soft: var(--amber-soft);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-feature-settings: "tnum";
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* Tailwind v4's Preflight sets interactive controls to cursor:default.
+   Restore a pointer on anything clickable, and not-allowed when disabled. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+label:has(> input[type="file"]),
+select:not(:disabled),
+summary {
+  cursor: pointer;
+}
+button:disabled,
+select:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.fade-in {
+  animation: fade-in 0.25s ease both;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

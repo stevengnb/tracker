@@ -221,8 +221,24 @@ function MiniCalendar({
   const [view, setView] = useState({ y: vy, m: vm - 1 }); // m: 0-11
   const today = todayStr();
 
+  // Dates in the viewed month that already have a note — shown as a dot.
+  const [noted, setNoted] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    const mm = `${view.y}-${pad(view.m + 1)}`;
+    fetch(`/api/notes?month=${mm}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d.ok) setNoted(new Set<string>(d.dates));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [view.y, view.m]);
+
   const first = new Date(view.y, view.m, 1);
-  const startDow = (first.getDay() + 6) % 7; // Monday-first
+  const startDow = first.getDay(); // Sunday-first
   const daysIn = new Date(view.y, view.m + 1, 0).getDate();
   const label = first.toLocaleDateString("en-GB", {
     month: "long",
@@ -261,7 +277,7 @@ function MiniCalendar({
         </button>
       </div>
       <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] text-faint">
-        {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
+        {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
           <span key={i}>{d}</span>
         ))}
       </div>
@@ -271,11 +287,13 @@ function MiniCalendar({
           const ds = iso(view.y, view.m, d);
           const selected = ds === value;
           const isToday = ds === today;
+          const hasNote = noted.has(ds);
           return (
             <button
               key={i}
               onClick={() => onPick(ds)}
-              className={`flex aspect-square items-center justify-center rounded-md text-[12px] tabular-nums transition-colors ${
+              title={hasNote ? "Has a note" : undefined}
+              className={`relative flex aspect-square items-center justify-center rounded-md text-[12px] tabular-nums transition-colors ${
                 selected
                   ? "bg-accent font-semibold text-white"
                   : isToday
@@ -284,6 +302,13 @@ function MiniCalendar({
               }`}
             >
               {d}
+              {hasNote && (
+                <span
+                  className={`absolute bottom-1 size-1 rounded-full ${
+                    selected ? "bg-white" : "bg-accent"
+                  }`}
+                />
+              )}
             </button>
           );
         })}

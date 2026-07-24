@@ -5,6 +5,9 @@ import { useState, useTransition } from "react";
 import { Check, EyeOff, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { Habit } from "@/lib/types";
 import { Badge, Card } from "./ui";
+import { Select } from "./Select";
+import { toast } from "@/lib/toast";
+import { confirmDialog } from "@/lib/confirm";
 
 export function HabitToggle({
   habitId,
@@ -37,7 +40,7 @@ export function HabitToggle({
         method: "POST",
       });
       const data = await res.json().catch(() => ({ ok: false }));
-      if (!data.ok) alert(data.error ?? "Request failed — is the DB writable?");
+      if (!data.ok) toast(data.error ?? "Request failed — is the DB writable?");
       router.refresh();
     });
   return (
@@ -80,7 +83,7 @@ export function HabitCard({
     start(async () => {
       const res = await fetch(`/api/habits/${habit.id}`, init);
       const d = await res.json().catch(() => ({ ok: false }));
-      if (!d.ok) alert(d.error ?? "Request failed — is the DB writable?");
+      if (!d.ok) toast(d.error ?? "Request failed — is the DB writable?");
       router.refresh();
     });
 
@@ -92,7 +95,7 @@ export function HabitCard({
         body: JSON.stringify({ date }),
       });
       const d = await res.json().catch(() => ({ ok: false }));
-      if (!d.ok) alert(d.error ?? "Request failed — is the DB writable?");
+      if (!d.ok) toast(d.error ?? "Request failed — is the DB writable?");
       router.refresh();
     });
 
@@ -107,13 +110,14 @@ export function HabitCard({
     setEditing(false);
   };
 
-  const remove = () => {
-    if (
-      !confirm(
-        `Delete "${habit.name}" and all its logged history? This can't be undone.`,
-      )
-    )
-      return;
+  const remove = async () => {
+    const ok = await confirmDialog({
+      title: "Delete habit",
+      message: `Delete "${habit.name}" and all its logged history? This can't be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     call({ method: "DELETE" });
   };
 
@@ -236,7 +240,7 @@ export function AddHabit() {
         }),
       });
       const data = await res.json().catch(() => ({ ok: false }));
-      if (!data.ok) alert(data.error ?? "Request failed — is the DB writable?");
+      if (!data.ok) toast(data.error ?? "Request failed — is the DB writable?");
       setName("");
       setOpen(false);
       router.refresh();
@@ -257,15 +261,16 @@ export function AddHabit() {
         autoFocus
         className="min-w-0 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
       />
-      <select
+      <Select
         value={autoSource}
-        onChange={(e) => setAutoSource(e.target.value)}
-        className="rounded-lg border border-line bg-card px-2 py-2 text-[13px] text-muted outline-none focus:border-accent"
-      >
-        <option value="">Manual only</option>
-        <option value="brain-portal">Auto: Brain Portal</option>
-        <option value="linux-session">Auto: Linux Session</option>
-      </select>
+        onChange={setAutoSource}
+        className="w-44"
+        options={[
+          { value: "", label: "Manual only" },
+          { value: "brain-portal", label: "Auto: Brain Portal" },
+          { value: "linux-session", label: "Auto: Linux Session" },
+        ]}
+      />
       <button
         disabled={pending}
         className="rounded-lg bg-accent px-3.5 py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"

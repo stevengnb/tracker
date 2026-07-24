@@ -6,13 +6,13 @@ import { fail, ok } from "@/lib/api";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-// Edit title / note. Body: { title?, note? }
+// Edit title / note, or move to a folder. Body: { title?, note?, folder_id? }
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
   const body = await req.json().catch(() => ({}));
   try {
     const fields: string[] = [];
-    const values: (string | null)[] = [];
+    const values: (string | number | null)[] = [];
     if ("title" in body) {
       const t = (body.title ?? "").trim();
       if (!t) return fail("title cannot be empty");
@@ -22,6 +22,11 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     if ("note" in body) {
       fields.push("note = ?");
       values.push((body.note ?? "").trim() || null);
+    }
+    if ("folder_id" in body) {
+      const fid = body.folder_id;
+      fields.push("folder_id = ?");
+      values.push(fid == null || fid === "" ? null : Number(fid));
     }
     if (!fields.length) return fail("nothing to update");
     getDb()

@@ -1,15 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Check, ExternalLink, Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { WatchlistItem } from "@/lib/types";
 import { QUEUE_CATEGORIES, QUEUE_CATEGORY_LABELS } from "@/lib/types";
+import { Select } from "./Select";
+import { toast } from "@/lib/toast";
+import { confirmDialog } from "@/lib/confirm";
 
 async function api(url: string, init?: RequestInit) {
   const res = await fetch(url, init);
   const data = await res.json().catch(() => ({ ok: false }));
-  if (!data.ok) alert(data.error ?? "Request failed — is the DB writable?");
+  if (!data.ok) toast(data.error ?? "Request failed — is the DB writable?");
   return data;
 }
 
@@ -60,17 +63,15 @@ export function AddQueueItem({ kind }: { kind: "watch" | "read" }) {
         placeholder={kind === "read" ? "URL" : "URL (optional)"}
         className="min-w-40 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
       />
-      <select
+      <Select
         value={category}
-        onChange={(e) => setCategory(e.target.value)}
-        className="rounded-lg border border-line bg-card px-2 py-2 text-[13px] text-muted outline-none focus:border-accent"
-      >
-        {QUEUE_CATEGORIES[kind].map((c) => (
-          <option key={c} value={c}>
-            {QUEUE_CATEGORY_LABELS[c] ?? c}
-          </option>
-        ))}
-      </select>
+        onChange={setCategory}
+        className="w-36"
+        options={QUEUE_CATEGORIES[kind].map((c) => ({
+          value: c,
+          label: QUEUE_CATEGORY_LABELS[c] ?? c,
+        }))}
+      />
       <button
         disabled={pending}
         className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
@@ -81,10 +82,23 @@ export function AddQueueItem({ kind }: { kind: "watch" | "read" }) {
   );
 }
 
-export function QueueRow({ item }: { item: WatchlistItem }) {
+export function QueueRow({
+  item,
+  highlight = false,
+}: {
+  item: WatchlistItem;
+  highlight?: boolean;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const rowRef = useRef<HTMLDivElement>(null);
   const done = item.status === "watched" || item.status === "read";
+
+  // When arrived at via a direct link (?item=id), bring it into view.
+  useEffect(() => {
+    if (highlight)
+      rowRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [highlight]);
   const toggle = () =>
     start(async () => {
       await api(`/api/watchlist/${item.id}`, {
@@ -94,12 +108,18 @@ export function QueueRow({ item }: { item: WatchlistItem }) {
       });
       router.refresh();
     });
-  const remove = () =>
+  const remove = async () => {
+    const ok = await confirmDialog({
+      message: "Delete this item?",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     start(async () => {
-      if (!confirm("Delete this item?")) return;
       await api(`/api/watchlist/${item.id}`, { method: "DELETE" });
       router.refresh();
     });
+  };
   const doneTitle =
     item.kind === "read"
       ? done
@@ -110,7 +130,10 @@ export function QueueRow({ item }: { item: WatchlistItem }) {
         : "Mark watched";
   return (
     <div
-      className={`group flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-line/40 ${pending ? "opacity-50" : ""}`}
+      ref={rowRef}
+      className={`group flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-line/40 ${pending ? "opacity-50" : ""} ${
+        highlight ? "bg-accent-soft ring-1 ring-accent/40" : ""
+      }`}
     >
       <div className="min-w-0 flex-1">
         <span

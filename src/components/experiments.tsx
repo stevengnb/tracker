@@ -15,11 +15,14 @@ import {
 } from "lucide-react";
 import type { Experiment, ExperimentAttachment } from "@/lib/types";
 import { Badge, Card } from "./ui";
+import { Select } from "./Select";
+import { toast } from "@/lib/toast";
+import { confirmDialog } from "@/lib/confirm";
 
 async function api(url: string, init?: RequestInit) {
   const res = await fetch(url, init);
   const data = await res.json().catch(() => ({ ok: false }));
-  if (!data.ok) alert(data.error ?? "Request failed — is the DB writable?");
+  if (!data.ok) toast(data.error ?? "Request failed — is the DB writable?");
   return data;
 }
 
@@ -136,8 +139,14 @@ export function ExperimentCard({
     setEditing(false);
   };
 
-  const remove = () => {
-    if (!confirm(`Delete experiment "${x.title}"? This can't be undone.`)) return;
+  const remove = async () => {
+    const ok = await confirmDialog({
+      title: "Delete experiment",
+      message: `Delete experiment "${x.title}"? This can't be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     start(async () => {
       await api(`/api/experiments/${x.id}`, { method: "DELETE" });
       router.refresh();
@@ -211,16 +220,17 @@ export function ExperimentCard({
       {/* Status selector */}
       <div className="mt-3 flex items-center gap-2">
         <Badge tone={meta.tone}>{meta.label}</Badge>
-        <select
+        <Select
           value={x.status}
-          onChange={(e) => patch({ status: e.target.value })}
-          className="rounded-md border border-line bg-card px-2 py-1 text-[11px] text-muted outline-none focus:border-accent"
-        >
-          <option value="to-try">to try</option>
-          <option value="in-progress">in progress</option>
-          <option value="done">done</option>
-          <option value="abandoned">abandoned</option>
-        </select>
+          onChange={(v) => patch({ status: v })}
+          className="w-36"
+          options={[
+            { value: "to-try", label: "to try" },
+            { value: "in-progress", label: "in progress" },
+            { value: "done", label: "done" },
+            { value: "abandoned", label: "abandoned" },
+          ]}
+        />
       </div>
 
       {/* Result / outcome */}
@@ -279,7 +289,7 @@ function ProofAttachments({
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch(base, { method: "POST", body: fd });
-      if (!res.ok) alert("Upload failed — is the uploads dir writable?");
+      if (!res.ok) toast("Upload failed — is the uploads dir writable?");
       router.refresh();
     });
 

@@ -4,6 +4,10 @@ import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
+import { Toaster } from "@/components/Toaster";
+import { ConfirmHost } from "@/components/ConfirmHost";
+import { CommandPalette } from "@/components/CommandPalette";
+import { PageviewLogger } from "@/components/PageviewLogger";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,6 +46,10 @@ export default function RootLayout({
               </main>
             </div>
           </div>
+          <Toaster />
+          <ConfirmHost />
+          <CommandPalette />
+          <PageviewLogger />
         </ThemeProvider>
       </body>
     </html>

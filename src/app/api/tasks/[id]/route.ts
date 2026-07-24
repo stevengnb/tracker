@@ -23,10 +23,17 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     }
     const fields: string[] = [];
     const values: (string | null)[] = [];
-    for (const key of ["title", "priority", "status", "due_date", "category"]) {
+    for (const key of [
+      "title",
+      "priority",
+      "status",
+      "due_date",
+      "category",
+      "description",
+    ]) {
       if (key in body) {
         fields.push(`${key} = ?`);
-        values.push(body[key]);
+        values.push(body[key] === "" ? null : body[key]);
       }
     }
     if (!fields.length) return fail("nothing to update");

@@ -1,16 +1,21 @@
 import { getDb } from "./db";
 import { addDays, todayStr } from "./dates";
+import { allFiles, buildTree } from "./vault";
 import { TASK_CATEGORIES } from "./types";
 import type {
   Attempt,
   Challenge,
+  EventItem,
   Experiment,
   ExperimentAttachment,
+  LinkItem,
   FileFolder,
   FileItem,
   Goal,
   GoalAttachment,
+  Guide,
   Habit,
+  PinnedLink,
   Task,
   WatchlistItem,
 } from "./types";
@@ -174,10 +179,21 @@ export function getTasks(filters?: {
     where.push("category = ?");
     params.push(filters.category);
   }
-  const sql = `SELECT * FROM tasks ${where.length ? "WHERE " + where.join(" AND ") : ""}
+  const sql = `SELECT tasks.*,
+      (SELECT COUNT(*) FROM links WHERE source_type='task' AND source_id=tasks.id) AS link_count
+    FROM tasks ${where.length ? "WHERE " + where.join(" AND ") : ""}
     ORDER BY CASE priority WHEN 'p0' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
              created_at DESC`;
   return getDb().prepare(sql).all(...params) as Task[];
+}
+
+// Cross-entity links (e.g. a task → a Queue item), for jumping between them.
+export function getLinks(sourceType: string, sourceId: number): LinkItem[] {
+  return getDb()
+    .prepare(
+      "SELECT * FROM links WHERE source_type = ? AND source_id = ? ORDER BY id",
+    )
+    .all(sourceType, sourceId) as LinkItem[];
 }
 
 export function getTaskCategories(): string[] {
@@ -399,6 +415,275 @@ export function getFiles(folderId: number | null): FileItem[] {
   return getDb()
     .prepare(`SELECT * FROM files WHERE ${where} ORDER BY created_at DESC`)
     .all(...params) as FileItem[];
+}
+
+export function getFile(id: number): FileItem | undefined {
+  return getDb().prepare("SELECT * FROM files WHERE id = ?").get(id) as
+    | FileItem
+    | undefined;
+}
+
+/** Flat list of all folders with a "Parent / Child" path label (for move menus). */
+export function getAllFolders(): { id: number; name: string; label: string }[] {
+  const rows = getDb()
+    .prepare("SELECT id, name, parent_id FROM file_folders")
+    .all() as { id: number; name: string; parent_id: number | null }[];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const label = (r: { name: string; parent_id: number | null }): string => {
+    const parts = [r.name];
+    let p = r.parent_id;
+    const seen = new Set<number>();
+    while (p != null && !seen.has(p)) {
+      seen.add(p);
+      const par = byId.get(p);
+      if (!par) break;
+      parts.unshift(par.name);
+      p = par.parent_id;
+    }
+    return parts.join(" / ");
+  };
+  return rows
+    .map((r) => ({ id: r.id, name: r.name, label: label(r) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+// ── Global search (command palette) ─────────────────────────
+
+export type SearchResult = {
+  type: string;
+  title: string;
+  subtitle?: string;
+  href: string;
+};
+
+export function globalSearch(q: string): SearchResult[] {
+  const term = q.trim();
+  if (term.length < 2) return [];
+  const like = `%${term.replace(/[%_\\]/g, "\\$&")}%`;
+  const db = getDb();
+  const out: SearchResult[] = [];
+  const rows = (sql: string) =>
+    db.prepare(sql).all(like) as Record<string, string>[];
+
+  for (const r of rows(
+    "SELECT title, category FROM tasks WHERE title LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 5",
+  ))
+    out.push({ type: "Task", title: r.title, subtitle: r.category, href: "/tasks" });
+
+  for (const r of rows(
+    "SELECT title, start_date FROM events WHERE title LIKE ? ESCAPE '\\' ORDER BY start_date DESC LIMIT 5",
+  ))
+    out.push({
+      type: "Event",
+      title: r.title,
+      subtitle: r.start_date,
+      href: `/calendar?month=${r.start_date.slice(0, 7)}`,
+    });
+
+  for (const r of rows(
+    "SELECT title FROM experiments WHERE title LIKE ? ESCAPE '\\' LIMIT 5",
+  ))
+    out.push({ type: "Experiment", title: r.title, href: "/experiments" });
+
+  for (const r of rows(
+    "SELECT title, month FROM goals WHERE title LIKE ? ESCAPE '\\' LIMIT 5",
+  ))
+    out.push({ type: "Goal", title: r.title, subtitle: r.month, href: "/goals" });
+
+  for (const r of rows(
+    "SELECT id, title, category, kind FROM watchlist_items WHERE title LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 5",
+  ))
+    // Anchor to the item itself (?item=id) rather than a status-filtered list:
+    // the queue page shows all statuses when item is set, so the link never
+    // goes stale when the item is later marked read/watched.
+    out.push({
+      type: "Queue",
+      title: r.title,
+      subtitle: r.category,
+      href: `/queue?kind=${r.kind}&item=${r.id}`,
+    });
+
+  for (const r of rows(
+    "SELECT id, title, kind FROM files WHERE title LIKE ? ESCAPE '\\' LIMIT 5",
+  ))
+    out.push({
+      type: "File",
+      title: r.title,
+      subtitle: r.kind,
+      href: `/files?file=${r.id}`,
+    });
+
+  for (const r of rows(
+    "SELECT id, category, date, puzzle_text FROM challenges WHERE puzzle_text LIKE ? ESCAPE '\\' ORDER BY date DESC LIMIT 5",
+  ))
+    out.push({
+      type: "Challenge",
+      title: `${r.category} · ${r.date}`,
+      subtitle: (r.puzzle_text ?? "").slice(0, 70),
+      href: `/challenge/${r.id}`,
+    });
+
+  for (const r of rows(
+    "SELECT id, title, category FROM guides WHERE title LIKE ? ESCAPE '\\' ORDER BY pinned DESC, id DESC LIMIT 5",
+  ))
+    out.push({
+      type: "Guide",
+      title: r.title,
+      subtitle: r.category,
+      href: `/guides?id=${r.id}`,
+    });
+
+  // Pins match on the URL too, so "cloudflare" finds the dashboard pin even
+  // when its title doesn't say so. href is the external URL, not a route.
+  for (const r of db
+    .prepare(
+      `SELECT title, category, url FROM pinned_links
+       WHERE title LIKE ? ESCAPE '\\' OR url LIKE ? ESCAPE '\\'
+       ORDER BY sort_order, id LIMIT 5`,
+    )
+    .all(like, like) as Record<string, string>[])
+    out.push({
+      type: "Pin",
+      title: r.title,
+      subtitle: r.category,
+      href: r.url,
+    });
+
+  const lower = term.toLowerCase();
+  for (const p of allFiles(buildTree())
+    .filter((f) => f.toLowerCase().includes(lower))
+    .slice(0, 5))
+    out.push({
+      type: "Wiki",
+      title: (p.split("/").pop() ?? p).replace(/\.md$/i, ""),
+      subtitle: p,
+      href: `/wiki?path=${encodeURIComponent(p)}`,
+    });
+
+  return out;
+}
+
+// ── Pins (permanent shelf of external links) ────────────────
+
+export function getPins(): PinnedLink[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM pinned_links
+       ORDER BY category COLLATE NOCASE, sort_order, title COLLATE NOCASE`,
+    )
+    .all() as PinnedLink[];
+}
+
+export function getPinCategories(): string[] {
+  return (
+    getDb()
+      .prepare(
+        "SELECT DISTINCT category FROM pinned_links ORDER BY category COLLATE NOCASE",
+      )
+      .all() as { category: string }[]
+  ).map((r) => r.category);
+}
+
+// ── Guides (how-tos / rule docs) ────────────────────────────
+
+export function getGuides(): Guide[] {
+  return getDb()
+    .prepare(
+      `SELECT id, title, category, content, pinned, created_at, updated_at
+       FROM guides ORDER BY pinned DESC, category COLLATE NOCASE, title COLLATE NOCASE`,
+    )
+    .all() as Guide[];
+}
+
+export function getGuideCategories(): string[] {
+  return (
+    getDb()
+      .prepare("SELECT DISTINCT category FROM guides ORDER BY category COLLATE NOCASE")
+      .all() as { category: string }[]
+  ).map((r) => r.category);
+}
+
+// ── Pageview stats (self-analytics) ─────────────────────────
+
+export function getPageviewStats(
+  days = 30,
+): { path: string; n: number; last: string }[] {
+  return getDb()
+    .prepare(
+      `SELECT path, COUNT(*) n, MAX(viewed_at) last FROM pageviews
+       WHERE viewed_at >= datetime('now', ?)
+       GROUP BY path ORDER BY n DESC`,
+    )
+    .all(`-${days} days`) as { path: string; n: number; last: string }[];
+}
+
+// ── Calendar events ─────────────────────────────────────────
+
+/**
+ * Events relevant to [start, end]: non-recurring ones overlapping the range,
+ * plus any recurring event whose anchor is on/before the range end (the
+ * per-day occurrence check happens in the calendar component).
+ */
+export function getEventsInRange(start: string, end: string): EventItem[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM events
+       WHERE (recur IS NULL AND start_date <= ? AND COALESCE(end_date, start_date) >= ?)
+          OR (recur IS NOT NULL AND start_date <= ?)
+       ORDER BY start_date, COALESCE(start_time, '00:00'), id`,
+    )
+    .all(end, start, end) as EventItem[];
+}
+
+/** Events occurring on a specific day (recurrence-aware) — for the Today card. */
+export function getEventsForDay(date: string): EventItem[] {
+  const wd = new Date(date + "T12:00:00").getDay();
+  const dom = date.slice(8);
+  return getEventsInRange(date, date).filter((e) => {
+    if (date < e.start_date) return false;
+    if (!e.recur) return date <= (e.end_date ?? e.start_date);
+    if (e.recur === "daily") return true;
+    if (e.recur === "weekly")
+      return new Date(e.start_date + "T12:00:00").getDay() === wd;
+    if (e.recur === "monthly") return e.start_date.slice(8) === dom;
+    return date <= (e.end_date ?? e.start_date);
+  });
+}
+
+export type CalendarTask = {
+  id: number;
+  title: string;
+  due_date: string;
+  status: string;
+  priority: string;
+};
+
+/** Tasks with a due date inside [start, end] (for the calendar overlay). */
+export function getTasksDueInRange(start: string, end: string): CalendarTask[] {
+  return getDb()
+    .prepare(
+      `SELECT id, title, due_date, status, priority FROM tasks
+       WHERE due_date IS NOT NULL AND due_date BETWEEN ? AND ?
+         AND status != 'cancelled'
+       ORDER BY due_date`,
+    )
+    .all(start, end) as CalendarTask[];
+}
+
+/** date -> number of habits completed that day, within [start, end]. */
+export function getHabitDoneCounts(
+  start: string,
+  end: string,
+): Record<string, number> {
+  const rows = getDb()
+    .prepare(
+      `SELECT date, COUNT(*) n FROM habit_log
+       WHERE completed = 1 AND date BETWEEN ? AND ? GROUP BY date`,
+    )
+    .all(start, end) as { date: string; n: number }[];
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.date] = r.n;
+  return out;
 }
 
 /** This folder's id plus every descendant folder id (for recursive delete). */

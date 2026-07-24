@@ -37,6 +37,18 @@ CREATE TABLE daily_notes (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  description TEXT,
+  start_date DATE NOT NULL,
+  end_date DATE,
+  start_time TEXT,
+  end_time TEXT,
+  color TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+, recur TEXT);
+
 CREATE TABLE experiment_attachments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     experiment_id INTEGER NOT NULL,
@@ -120,6 +132,32 @@ CREATE TABLE habits (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_type TEXT NOT NULL,
+  source_id INTEGER NOT NULL,
+  target_type TEXT NOT NULL,
+  target_title TEXT NOT NULL,
+  target_href TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE pageviews (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  path TEXT NOT NULL,
+  viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE guides (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'General',
+  content TEXT NOT NULL DEFAULT '',
+  pinned INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
@@ -129,7 +167,7 @@ CREATE TABLE tasks (
     category TEXT DEFAULT 'one-offs',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP
-);
+, description TEXT);
 
 CREATE TABLE "watchlist_items" (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,16 +182,33 @@ CREATE TABLE "watchlist_items" (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Pinned links: a permanent reference shelf of external URLs you re-open
+-- often. Unlike watchlist_items there is no consumed/done state — a pin
+-- stays until you remove it.
+CREATE TABLE pinned_links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  url TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'General',
+  note TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes
 CREATE INDEX idx_attachments_goal ON goal_attachments(goal_id);
 CREATE INDEX idx_attempts_challenge ON attempts(challenge_id);
 CREATE INDEX idx_challenges_date ON challenges(date DESC);
+CREATE INDEX idx_events_start ON events(start_date);
 CREATE INDEX idx_expatt_exp ON experiment_attachments(experiment_id);
 CREATE INDEX idx_files_folder ON files(folder_id);
 CREATE INDEX idx_folders_parent ON file_folders(parent_id);
 CREATE INDEX idx_goals_month ON goals(month);
 CREATE INDEX idx_habitlog_date ON habit_log(date);
 CREATE INDEX idx_habitlog_habit ON habit_log(habit_id);
+CREATE INDEX idx_links_source ON links(source_type, source_id);
+CREATE INDEX idx_pageviews_time ON pageviews(viewed_at);
+CREATE INDEX idx_pinned_links_cat ON pinned_links(category);
 CREATE INDEX idx_tasks_priority ON tasks(priority);
 CREATE INDEX idx_tasks_status ON tasks(status);
 CREATE INDEX idx_watchlist_category ON watchlist_items(category);

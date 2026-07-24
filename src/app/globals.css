@@ -103,6 +103,98 @@ select:disabled,
   cursor: not-allowed;
 }
 
+/* Rendered Markdown (Wiki pages). */
+.wiki-prose {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+  max-width: 46rem;
+}
+.wiki-prose h1 {
+  font-size: 1.6em;
+  font-weight: 700;
+  margin: 0.7em 0 0.4em;
+}
+.wiki-prose h2 {
+  font-size: 1.3em;
+  font-weight: 600;
+  margin: 1em 0 0.4em;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.2em;
+}
+.wiki-prose h3 {
+  font-size: 1.12em;
+  font-weight: 600;
+  margin: 0.9em 0 0.3em;
+}
+.wiki-prose p,
+.wiki-prose ul,
+.wiki-prose ol {
+  margin: 0.6em 0;
+}
+.wiki-prose ul {
+  list-style: disc;
+  padding-left: 1.4em;
+}
+.wiki-prose ol {
+  list-style: decimal;
+  padding-left: 1.4em;
+}
+.wiki-prose li {
+  margin: 0.2em 0;
+}
+.wiki-prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.wiki-prose code {
+  background: var(--line);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: var(--font-mono), monospace;
+}
+.wiki-prose pre {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.8em 1em;
+  overflow-x: auto;
+  margin: 0.7em 0;
+}
+.wiki-prose pre code {
+  background: none;
+  padding: 0;
+}
+.wiki-prose blockquote {
+  border-left: 3px solid var(--line);
+  padding-left: 1em;
+  color: var(--muted);
+  margin: 0.7em 0;
+}
+.wiki-prose table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0.7em 0;
+}
+.wiki-prose th,
+.wiki-prose td {
+  border: 1px solid var(--line);
+  padding: 0.4em 0.7em;
+  text-align: left;
+}
+.wiki-prose img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+.wiki-prose hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 1.2em 0;
+}
+
 .fade-in {
   animation: fade-in 0.25s ease both;
 }
@@ -114,5 +206,35 @@ select:disabled,
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* Snackbar entrance: slides up from below with a soft settle. */
+.snack-in {
+  animation: snack-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes snack-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Copied checkmark: pops in with a tiny overshoot. */
+.pop-in {
+  animation: pop-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }

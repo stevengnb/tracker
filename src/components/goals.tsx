@@ -15,11 +15,12 @@ import {
 } from "lucide-react";
 import type { Goal, GoalAttachment } from "@/lib/types";
 import { Badge, Card, Progress, statusTone } from "./ui";
+import { toast } from "@/lib/toast";
 
 async function api(url: string, init?: RequestInit) {
   const res = await fetch(url, init);
   const data = await res.json().catch(() => ({ ok: false }));
-  if (!data.ok) alert(data.error ?? "Request failed — is the DB writable?");
+  if (!data.ok) toast(data.error ?? "Request failed — is the DB writable?");
   return data;
 }
 
@@ -331,7 +332,7 @@ export function Attachments({
         method: "POST",
         body: fd,
       });
-      if (!res.ok) alert("Upload failed — is the uploads dir writable?");
+      if (!res.ok) toast("Upload failed — is the uploads dir writable?");
       router.refresh();
     });
 

@@ -3,11 +3,13 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronRight,
   Download,
   FileText,
   Folder,
+  FolderInput,
   FolderPlus,
   Home,
   Pencil,
@@ -17,13 +19,15 @@ import {
 } from "lucide-react";
 import type { FileFolder, FileItem } from "@/lib/types";
 import { Empty, PageHeader } from "./ui";
+import { toast } from "@/lib/toast";
+import { confirmDialog } from "@/lib/confirm";
 
 type FolderRow = FileFolder & { fileCount: number; subCount: number };
 
 async function api(url: string, init?: RequestInit) {
   const res = await fetch(url, init);
   const data = await res.json().catch(() => ({ ok: false }));
-  if (!data.ok) alert(data.error ?? "Request failed — is the DB writable?");
+  if (!data.ok) toast(data.error ?? "Request failed — is the DB writable?");
   return data;
 }
 
@@ -46,16 +50,22 @@ function named(f: File): File {
   });
 }
 
+type FolderOption = { id: number; name: string; label: string };
+
 export function FilesBrowser({
   folderId,
   path,
   folders,
   files,
+  allFolders,
+  openFile,
 }: {
   folderId: number | null;
   path: FileFolder[];
   folders: FolderRow[];
   files: FileItem[];
+  allFolders: FolderOption[];
+  openFile?: FileItem | null;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -64,7 +74,7 @@ export function FilesBrowser({
   const [uploading, setUploading] = useState(false);
   const [seedFile, setSeedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [viewing, setViewing] = useState<FileItem | null>(null);
+  const [viewing, setViewing] = useState<FileItem | null>(openFile ?? null);
 
   const openUploadWith = (f: File) => {
     setSeedFile(f);
@@ -228,6 +238,8 @@ export function FilesBrowser({
                   file={f}
                   onOpen={() => setViewing(f)}
                   onChanged={() => router.refresh()}
+                  allFolders={allFolders}
+                  currentFolderId={folderId}
                 />
               ))}
             </div>
@@ -286,13 +298,14 @@ function FolderCard({
     });
   };
 
-  const remove = () => {
-    if (
-      !confirm(
-        `Delete folder "${folder.name}" and everything inside it? This can't be undone.`,
-      )
-    )
-      return;
+  const remove = async () => {
+    const ok = await confirmDialog({
+      title: "Delete folder",
+      message: `Delete folder "${folder.name}" and everything inside it? This can't be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     start(async () => {
       await api(`/api/folders/${folder.id}`, { method: "DELETE" });
       onChanged();
@@ -358,20 +371,44 @@ function FileCard({
   file,
   onOpen,
   onChanged,
+  allFolders,
+  currentFolderId,
 }: {
   file: FileItem;
   onOpen: () => void;
   onChanged: () => void;
+  allFolders: FolderOption[];
+  currentFolderId: number | null;
 }) {
   const [, start] = useTransition();
+  const [moving, setMoving] = useState(false);
 
-  const remove = () => {
-    if (!confirm(`Delete "${file.title}"? This can't be undone.`)) return;
+  const move = (folderId: number | null) => {
+    setMoving(false);
+    start(async () => {
+      await api(`/api/files/${file.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder_id: folderId }),
+      });
+      onChanged();
+    });
+  };
+
+  const remove = async () => {
+    const ok = await confirmDialog({
+      message: `Delete "${file.title}"? This can't be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     start(async () => {
       await api(`/api/files/${file.id}`, { method: "DELETE" });
       onChanged();
     });
   };
+
+  const destinations = allFolders.filter((f) => f.id !== currentFolderId);
 
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-xl border border-line bg-card transition-colors hover:border-accent">
@@ -410,14 +447,69 @@ function FileCard({
             </p>
           )}
         </div>
-        <button
-          onClick={remove}
-          title="Delete"
-          className="shrink-0 text-faint hover:text-bad sm:opacity-0 sm:group-hover:opacity-100"
-        >
-          <Trash2 className="size-3.5" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            onClick={() => setMoving(true)}
+            title="Move to folder"
+            className="text-faint transition-colors hover:text-accent sm:opacity-0 sm:group-hover:opacity-100"
+          >
+            <FolderInput className="size-3.5" />
+          </button>
+          <button
+            onClick={remove}
+            title="Delete"
+            className="text-faint transition-colors hover:text-bad sm:opacity-0 sm:group-hover:opacity-100"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
       </div>
+
+      {moving && (
+        <Overlay onClose={() => setMoving(false)}>
+          <div
+            className="w-full max-w-xs rounded-xl border border-line bg-bg p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="text-[14px] font-semibold">Move file</h3>
+              <button
+                onClick={() => setMoving(false)}
+                className="text-faint hover:text-text"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <p className="mb-3 truncate text-[12px] text-muted">{file.title}</p>
+            <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
+              {currentFolderId != null && (
+                <button
+                  onClick={() => move(null)}
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-line/60"
+                >
+                  <Home className="size-3.5 shrink-0 text-faint" /> Root
+                </button>
+              )}
+              {destinations.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => move(f.id)}
+                  title={f.label}
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-line/60"
+                >
+                  <Folder className="size-3.5 shrink-0 text-faint" />
+                  <span className="truncate">{f.label}</span>
+                </button>
+              ))}
+              {destinations.length === 0 && currentFolderId == null && (
+                <p className="px-2 py-2 text-[12px] text-faint">
+                  No folders yet — create one first.
+                </p>
+              )}
+            </div>
+          </div>
+        </Overlay>
+      )}
     </div>
   );
 }
@@ -460,7 +552,7 @@ function UploadDialog({
       const res = await fetch("/api/files", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({ ok: false }));
       if (!data.ok) {
-        alert(data.error ?? "Upload failed");
+        toast(data.error ?? "Upload failed");
         return;
       }
       onDone();
@@ -653,6 +745,8 @@ function Overlay({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -665,12 +759,14 @@ function Overlay({
     };
   }, [onClose]);
 
-  return (
+  if (!mounted) return null;
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]"
       onClick={onClose}
     >
       {children}
-    </div>
+    </div>,
+    document.body,
   );
 }

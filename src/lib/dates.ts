@@ -49,3 +49,34 @@ export function monthLabel(month: string): string {
     year: "numeric",
   });
 }
+
+// Shift a "YYYY-MM" month by delta months.
+export function monthShift(month: string, delta: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Short weekday labels ordered for the given week start (0=Sun, 1=Mon).
+export function weekdayLabels(weekStart = 0): string[] {
+  const base = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return [...base.slice(weekStart), ...base.slice(0, weekStart)];
+}
+
+// The 42 ISO days (6 weeks) covering a "YYYY-MM" month grid, honoring weekStart.
+export function monthGridDays(month: string, weekStart = 0): string[] {
+  const [y, m] = month.split("-").map(Number);
+  const first = new Date(y, m - 1, 1);
+  const startDow = (first.getDay() - weekStart + 7) % 7;
+  const start = new Date(y, m - 1, 1 - startDow);
+  const days: string[] = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    days.push(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+        d.getDate(),
+      ).padStart(2, "0")}`,
+    );
+  }
+  return days;
+}

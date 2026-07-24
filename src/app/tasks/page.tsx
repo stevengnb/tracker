@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getTaskCategories, getTasks } from "@/lib/queries";
 import { Card, Empty, PageHeader } from "@/components/ui";
 import { QuickAddTask, TaskRow } from "@/components/tasks";
+import { TaskFilterMemory } from "@/components/TaskFilterMemory";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ export default async function TasksPage(props: {
 
   return (
     <div className="mx-auto max-w-3xl">
+      <TaskFilterMemory />
       <PageHeader title="Tasks" subtitle="Quick to-dos and one-offs." />
       <QuickAddTask categories={categories} />
 

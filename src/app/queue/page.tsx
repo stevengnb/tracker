@@ -30,12 +30,22 @@ function pill(active: boolean) {
 }
 
 export default async function QueuePage(props: {
-  searchParams: Promise<{ kind?: string; category?: string; status?: string }>;
+  searchParams: Promise<{
+    kind?: string;
+    category?: string;
+    status?: string;
+    item?: string;
+  }>;
 }) {
   const sp = await props.searchParams;
   const kind = sp.kind === "read" ? "read" : "watch";
-  const category = sp.category ?? "all";
-  const status = sp.status ?? (kind === "read" ? "to-read" : "to-watch");
+  // When linking straight to an item, drop the category/status filters so it's
+  // guaranteed visible regardless of where it currently sits, and highlight it.
+  const highlightId = sp.item ? Number(sp.item) : null;
+  const category = highlightId ? "all" : (sp.category ?? "all");
+  const status = highlightId
+    ? "all"
+    : (sp.status ?? (kind === "read" ? "to-read" : "to-watch"));
   const items = getWatchlist({ kind, category, status });
   const cats = QUEUE_CATEGORIES[kind];
 
@@ -90,7 +100,11 @@ export default async function QueuePage(props: {
         {items.length ? (
           <div className="-mx-2">
             {items.map((item) => (
-              <QueueRow key={item.id} item={item} />
+              <QueueRow
+                key={item.id}
+                item={item}
+                highlight={item.id === highlightId}
+              />
             ))}
           </div>
         ) : (

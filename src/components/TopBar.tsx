@@ -1,6 +1,8 @@
 import { Flame } from "lucide-react";
 import { computeStreaks } from "@/lib/queries";
 import { fmtLong, fmtShort, todayStr } from "@/lib/dates";
+import { Clock } from "./Clock";
+import { CmdkButton } from "./CmdkButton";
 import { DistractionSheet } from "./DistractionSheet";
 import { MobileNav } from "./MobileNav";
 import { ThemeToggle } from "./ThemeToggle";
@@ -16,6 +18,7 @@ export function TopBar() {
           <span className="sm:hidden">{fmtShort(today)}</span>
           <span className="hidden sm:inline">{fmtLong(today)}</span>
         </span>
+        <Clock />
       </div>
       <div className="flex items-center gap-3">
         <span
@@ -27,6 +30,7 @@ export function TopBar() {
           <Flame className="size-3.5" />
           {current}
         </span>
+        <CmdkButton />
         <DistractionSheet />
         <ThemeToggle />
       </div>

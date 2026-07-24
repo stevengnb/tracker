@@ -6,9 +6,10 @@ import {
   getChallenges,
   getChallengeStats,
 } from "@/lib/queries";
-import { categoryColor, TIER_LABELS } from "@/lib/types";
+import { categoryColor } from "@/lib/types";
 import { Badge, Card, Empty, PageHeader, StatCard, statusTone } from "@/components/ui";
 import { Heatmap } from "@/components/Heatmap";
+import { ChallengeFilters } from "@/components/ChallengeFilters";
 
 export const dynamic = "force-dynamic";
 
@@ -48,43 +49,11 @@ export default async function ChallengesPage(props: {
         />
       </Card>
 
-      <form method="get" action="/challenges" className="mb-4 flex flex-wrap gap-2">
-        <select
-          name="category"
-          defaultValue={category ?? ""}
-          className="rounded-lg border border-line bg-card px-2.5 py-1.5 text-[13px] text-muted outline-none focus:border-accent"
-        >
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <select
-          name="difficulty"
-          defaultValue={difficulty ?? ""}
-          className="rounded-lg border border-line bg-card px-2.5 py-1.5 text-[13px] text-muted outline-none focus:border-accent"
-        >
-          <option value="">All tiers</option>
-          {[1, 2, 3].map((t) => (
-            <option key={t} value={t}>
-              {TIER_LABELS[t]}
-            </option>
-          ))}
-        </select>
-        <button className="rounded-lg border border-line px-3 py-1.5 text-[13px] text-muted transition-colors hover:border-accent hover:text-accent">
-          Filter
-        </button>
-        {(category || difficulty) && (
-          <Link
-            href="/challenges"
-            className="self-center text-[12px] text-faint hover:text-accent"
-          >
-            clear
-          </Link>
-        )}
-      </form>
+      <ChallengeFilters
+        categories={categories}
+        category={category}
+        difficulty={difficulty}
+      />
 
       <div className="flex flex-col gap-2">
         {challenges.map((c) => (

@@ -31,9 +31,44 @@ export type Task = {
   status: "pending" | "done" | "cancelled";
   due_date: string | null;
   category: string;
+  description: string | null;
+  link_count?: number;
   created_at: string;
   completed_at: string | null;
 };
+
+export type LinkItem = {
+  id: number;
+  source_type: string;
+  source_id: number;
+  target_type: string;
+  target_title: string;
+  target_href: string;
+  created_at: string;
+};
+
+export type EventItem = {
+  id: number;
+  title: string;
+  description: string | null;
+  start_date: string; // YYYY-MM-DD
+  end_date: string | null; // optional, for multi-day
+  start_time: string | null; // HH:MM; null = all-day
+  end_time: string | null;
+  color: string | null;
+  recur: string | null; // null | "daily" | "weekly" | "monthly"
+  created_at: string;
+};
+
+// Small event colour palette (first = default).
+export const EVENT_COLORS = [
+  "#6366f1",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#0ea5e9",
+  "#a855f7",
+];
 
 export type Goal = {
   id: number;
@@ -154,6 +189,30 @@ export type FileItem = {
   mime: string;
   kind: "image" | "pdf";
   size: number | null;
+  created_at: string;
+};
+
+// ── Guides (how-tos / rule docs / checklists) ───────────────
+
+export type Guide = {
+  id: number;
+  title: string;
+  category: string;
+  content: string; // markdown
+  pinned: number; // 0 | 1
+  created_at: string;
+  updated_at: string;
+};
+
+// ── Pins (permanent shelf of external links) ────────────────
+
+export type PinnedLink = {
+  id: number;
+  title: string;
+  url: string;
+  category: string;
+  note: string | null;
+  sort_order: number;
   created_at: string;
 };
 

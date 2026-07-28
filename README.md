@@ -40,6 +40,13 @@ npm run build
 npm run start
 ```
 
+`npm start` binds to `127.0.0.1:3000` only — the app is never directly
+reachable from the network. Serve it through a same-host reverse proxy or a
+Cloudflare Tunnel, and point the proxy at `http://127.0.0.1:3000` (not
+`localhost`, which may resolve to IPv6 `::1` — the app binds the IPv4 loopback
+only). Binding a public interface directly is insecure; if you must, run
+`next start -H 0.0.0.0` explicitly.
+
 ## Configuration
 
 All configuration is via environment variables — see [`.env.example`](.env.example).
@@ -70,3 +77,18 @@ shapes each query uses.
 The app has no built-in login. In production it's intended to sit behind a
 reverse proxy or zero-trust layer (e.g. Cloudflare Access); the logout button
 simply points at that layer's logout endpoint via `NEXT_PUBLIC_LOGOUT_URL`.
+
+Two application-layer hardening hooks live in `src/proxy.ts` (see
+[`.env.example`](.env.example)):
+
+- **CF Access assertion verification** *(opt-in)* — set `CF_ACCESS_TEAM_DOMAIN`
+  and `CF_ACCESS_AUD` and every request must carry a valid
+  `Cf-Access-Jwt-Assertion` header (RS256-verified against your team's JWKS,
+  `aud` + `iss` checked). Unset → no in-app verification (dev default).
+  See [`docs/cf-access-jwt.md`](docs/cf-access-jwt.md) for the full enable/
+  disable/troubleshooting guide — read it before enabling (it 401s direct
+  localhost access by design).
+- **Same-origin gate** *(always on)* — mutating requests (`POST`/`PUT`/
+  `PATCH`/`DELETE`) are rejected with 403 unless `Sec-Fetch-Site`/`Origin`
+  indicate same-origin. Set `ALLOWED_ORIGIN` if your proxy rewrites the `Host`
+  header.

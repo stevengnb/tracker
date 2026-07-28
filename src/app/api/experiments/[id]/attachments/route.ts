@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { getDb, uploadsDir } from "@/lib/db";
 import { fail, formRedirect, ok } from "@/lib/api";
+import { validateUpload } from "@/lib/uploads";
 
 // Proof attachments for an experiment: file uploads (multipart) or note/link
 // (form/JSON). Files land in the same uploads/ dir the goals attachments use.
@@ -25,6 +26,8 @@ export async function POST(
       const file = form.get("file");
       const type = (form.get("type") as string) || (file ? "file" : "note");
       if (file instanceof File && file.size > 0) {
+        const err = validateUpload(file);
+        if (err) return fail(err);
         const safe = `${Date.now()}_${file.name.replace(/[^\w.\-]/g, "_")}`;
         const dir = uploadsDir();
         fs.mkdirSync(dir, { recursive: true });

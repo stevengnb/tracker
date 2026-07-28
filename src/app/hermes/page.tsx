@@ -30,7 +30,9 @@ export default async function HermesPage(props: {
   searchParams: Promise<{ log_lines?: string }>;
 }) {
   const sp = await props.searchParams;
-  const logLines = Number(sp.log_lines) || 25;
+  // Clamp so a crafted ?log_lines=999999999 can't force an unbounded
+  // journalctl read and blow up the response.
+  const logLines = Math.min(Math.max(Number(sp.log_lines) || 25, 1), 500);
   const health = getSystemHealth();
   const log = gatewayLogTail(logLines);
   const gateway = gatewayStatus();

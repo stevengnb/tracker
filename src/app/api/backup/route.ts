@@ -7,8 +7,16 @@ import { fail, ok } from "@/lib/api";
 const SCRIPT = path.join(os.homedir(), ".local/bin/tracker-backup.sh");
 const BACKUP_DIR = path.join(os.homedir(), "backups/tracker-portal");
 
+// The backup endpoint runs an out-of-tree shell script and blocks the event
+// loop for up to 60s. It stays hidden (404) unless the operator explicitly
+// flips BACKUP_API_ENABLED=true for the duration of a backup run.
+function disabled() {
+  return process.env.BACKUP_API_ENABLED !== "true";
+}
+
 // Trigger an on-demand backup.
 export async function POST() {
+  if (disabled()) return fail("backup disabled", 404);
   try {
     if (!fs.existsSync(SCRIPT))
       return fail("backup script not installed on this host", 500);
@@ -22,6 +30,7 @@ export async function POST() {
 
 // Report the most recent local backup.
 export async function GET() {
+  if (disabled()) return fail("backup disabled", 404);
   try {
     const dirs = fs.existsSync(BACKUP_DIR)
       ? fs

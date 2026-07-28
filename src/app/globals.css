@@ -143,6 +143,18 @@ select:disabled,
 .wiki-prose li {
   margin: 0.2em 0;
 }
+/* GFM task lists (- [ ] / - [x]): show the checkbox only, not a bullet too. */
+.wiki-prose .contains-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+.wiki-prose .task-list-item {
+  list-style: none;
+}
+.wiki-prose .task-list-item input[type="checkbox"] {
+  margin: 0 0.5em 0 0;
+  vertical-align: middle;
+}
 .wiki-prose a {
   color: var(--accent);
   text-decoration: underline;

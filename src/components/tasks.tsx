@@ -234,7 +234,11 @@ export function TaskRow({ task }: { task: Task }) {
     saveNote();
     setOpen(false);
   };
-  closeRef.current = closeModal;
+  // Assign inside an effect (runs after every render) — writing a ref during
+  // render is disallowed (react-hooks/refs) and breaks under concurrent React.
+  useEffect(() => {
+    closeRef.current = closeModal;
+  });
   const openNotes = () => {
     setPreview(!!task.description);
     setOpen(true);

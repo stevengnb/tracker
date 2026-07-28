@@ -29,6 +29,17 @@ export async function readBody(
 }
 
 export function formRedirect(req: NextRequest, fallback: string) {
-  const back = req.headers.get("referer") ?? fallback;
-  return NextResponse.redirect(back, 303);
+  // Redirect back to the referring page, but only if it points at this same
+  // origin — mirroring an arbitrary Referer would be a reflected open redirect.
+  const referer = req.headers.get("referer");
+  let back = fallback;
+  if (referer) {
+    try {
+      const url = new URL(referer);
+      if (url.origin === req.nextUrl.origin) back = url.toString();
+    } catch {
+      // malformed Referer — fall through to the safe fallback
+    }
+  }
+  return NextResponse.redirect(new URL(back, req.nextUrl.origin), 303);
 }

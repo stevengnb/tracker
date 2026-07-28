@@ -3,14 +3,7 @@ import fs from "fs";
 import path from "path";
 import { getDb, uploadsDir } from "@/lib/db";
 import { fail, ok } from "@/lib/api";
-
-const ALLOWED: Record<string, "image" | "pdf"> = {
-  "image/png": "image",
-  "image/jpeg": "image",
-  "image/gif": "image",
-  "image/webp": "image",
-  "application/pdf": "pdf",
-};
+import { ALLOWED_UPLOAD_MIME, validateUpload } from "@/lib/uploads";
 
 // Upload one file into a folder. multipart: file, folder_id?, title?, note?
 export async function POST(req: NextRequest) {
@@ -21,8 +14,9 @@ export async function POST(req: NextRequest) {
     const file = form.get("file");
     if (!(file instanceof File) || file.size === 0)
       return fail("no file provided");
-    const kind = ALLOWED[file.type];
-    if (!kind) return fail("only images and PDFs are allowed");
+    const err = validateUpload(file);
+    if (err) return fail(err);
+    const kind = ALLOWED_UPLOAD_MIME[file.type];
 
     const folderRaw = form.get("folder_id");
     const folderId =

@@ -61,3 +61,7 @@ __pycache__/
 /venv/
 /PRD-revamp.md
 /.claude/
+
+# ── Security audit artifacts (DB samples, host paths — never commit) ──
+/piolium/
+/docs/

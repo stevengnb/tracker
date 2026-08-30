@@ -47,6 +47,10 @@ next-env.d.ts
 *.sqlite3
 *.db-shm
 *.db-wal
+# Database backups (e.g. logbook.db.bak.YYYYMMDD-HHMMSS) — not caught by *.db
+*.bak
+*.bak.*
+*.db.bak*
 /uploads/
 /data/
 

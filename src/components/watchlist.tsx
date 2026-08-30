@@ -17,6 +17,7 @@ async function api(url: string, init?: RequestInit) {
 }
 
 function domain(url: string): string {
+  if (url.startsWith("/wiki")) return "wiki note";
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {

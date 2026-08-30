@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { getDb, uploadsDir } from "@/lib/db";
 import { fail, ok } from "@/lib/api";
-import { ALLOWED_UPLOAD_MIME, validateUpload } from "@/lib/uploads";
+import { resolveUploadKind, validateUpload } from "@/lib/uploads";
 
 // Upload one file into a folder. multipart: file, folder_id?, title?, note?
 export async function POST(req: NextRequest) {
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       return fail("no file provided");
     const err = validateUpload(file);
     if (err) return fail(err);
-    const kind = ALLOWED_UPLOAD_MIME[file.type];
+    const kind = resolveUploadKind(file)!; // non-null: validateUpload passed
 
     const folderRaw = form.get("folder_id");
     const folderId =

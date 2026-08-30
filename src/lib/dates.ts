@@ -3,6 +3,28 @@ export function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** "+07:00" — this machine's UTC offset at the given instant. */
+export function utcOffset(d: Date): string {
+  const mins = -d.getTimezoneOffset(); // getTimezoneOffset() is minutes *behind* UTC
+  const sign = mins < 0 ? "-" : "+";
+  const abs = Math.abs(mins);
+  return `${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
+}
+
+/**
+ * "2026-07-28T16:39:02+07:00" — local wall-clock plus an explicit offset, so
+ * the value is an unambiguous instant for a client in another timezone.
+ * (toISOString() would be unambiguous too, but converts to UTC and loses the
+ * local date, which matters for anything paired with a todayStr() date.)
+ */
+export function isoWithOffset(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` +
+    `T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}${utcOffset(d)}`
+  );
+}
+
 export function addDays(iso: string, n: number): string {
   const d = new Date(iso + "T12:00:00");
   d.setDate(d.getDate() + n);

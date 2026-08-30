@@ -85,7 +85,7 @@ CREATE TABLE files (
   filename TEXT NOT NULL,
   stored_name TEXT NOT NULL,
   mime TEXT NOT NULL,
-  kind TEXT NOT NULL CHECK(kind IN ('image','pdf')),
+  kind TEXT NOT NULL CHECK(kind IN ('image','pdf','zip','markdown')),
   size INTEGER,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -195,6 +195,18 @@ CREATE TABLE pinned_links (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Quiz attempts: one row per completed self-test taken on the /quiz page.
+-- Quizzes themselves are Markdown files under QUIZ_DIR (not in the DB); a row
+-- records the score for a given quiz slug so progress can be tracked over time.
+CREATE TABLE quiz_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT NOT NULL,
+  title TEXT NOT NULL,
+  score INTEGER NOT NULL,
+  total INTEGER NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes
 CREATE INDEX idx_attachments_goal ON goal_attachments(goal_id);
 CREATE INDEX idx_attempts_challenge ON attempts(challenge_id);
@@ -209,6 +221,7 @@ CREATE INDEX idx_habitlog_habit ON habit_log(habit_id);
 CREATE INDEX idx_links_source ON links(source_type, source_id);
 CREATE INDEX idx_pageviews_time ON pageviews(viewed_at);
 CREATE INDEX idx_pinned_links_cat ON pinned_links(category);
+CREATE INDEX idx_quiz_attempts_slug ON quiz_attempts(slug);
 CREATE INDEX idx_tasks_priority ON tasks(priority);
 CREATE INDEX idx_tasks_status ON tasks(status);
 CREATE INDEX idx_watchlist_category ON watchlist_items(category);

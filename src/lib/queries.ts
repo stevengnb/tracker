@@ -16,6 +16,8 @@ import type {
   Guide,
   Habit,
   PinnedLink,
+  QuizAttempt,
+  QuizStat,
   Task,
   WatchlistItem,
 } from "./types";
@@ -700,4 +702,40 @@ export function folderSubtreeIds(id: number): number[] {
       )
       .all(id) as { id: number }[]
   ).map((r) => r.id);
+}
+
+// ── Quizzes (self-test attempts; quizzes live as files in QUIZ_DIR) ──
+
+export function getQuizAttempts(slug: string, limit = 10): QuizAttempt[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM quiz_attempts WHERE slug = ? ORDER BY created_at DESC LIMIT ?`,
+    )
+    .all(slug, limit) as QuizAttempt[];
+}
+
+/** Per-slug roll-up (attempts, best %, latest %/date) for the quiz list. */
+export function getQuizStats(): Record<string, QuizStat> {
+  const rows = getDb()
+    .prepare(
+      `SELECT slug,
+              COUNT(*)                                   AS attempts,
+              MAX(CASE WHEN total > 0 THEN score * 100 / total ELSE 0 END) AS bestPct,
+              (SELECT score * 100 / total FROM quiz_attempts b
+                 WHERE b.slug = a.slug AND b.total > 0
+                 ORDER BY created_at DESC LIMIT 1)        AS lastPct,
+              MAX(created_at)                             AS lastAt
+         FROM quiz_attempts a
+        GROUP BY slug`,
+    )
+    .all() as (QuizStat & { slug: string })[];
+  const out: Record<string, QuizStat> = {};
+  for (const r of rows)
+    out[r.slug] = {
+      attempts: r.attempts,
+      bestPct: r.bestPct ?? 0,
+      lastPct: r.lastPct ?? 0,
+      lastAt: r.lastAt,
+    };
+  return out;
 }

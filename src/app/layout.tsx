@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
@@ -22,6 +22,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: { default: "Tracker", template: "%s — Tracker" },
   description: "Personal tracker: brain challenges, tasks, goals, habits.",
+  appleWebApp: { capable: true, title: "Tracker" },
+  icons: { apple: "/apple-touch-icon.png" },
+};
+
+// Colours the Android status bar once the PWA is installed standalone.
+export const viewport: Viewport = {
+  themeColor: "#0a0a0b",
 };
 
 export default function RootLayout({

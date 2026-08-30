@@ -115,7 +115,7 @@ export type WatchlistItem = {
 // Categories per queue kind. First value is the add-form default.
 export const QUEUE_CATEGORIES: Record<"watch" | "read", string[]> = {
   watch: ["youtube", "anime", "general", "channel"],
-  read: ["article", "github", "docs", "thread"],
+  read: ["article", "github", "docs", "thread", "topic"],
 };
 
 export const QUEUE_CATEGORY_LABELS: Record<string, string> = {
@@ -127,6 +127,7 @@ export const QUEUE_CATEGORY_LABELS: Record<string, string> = {
   github: "GitHub",
   docs: "Docs",
   thread: "Threads",
+  topic: "Topics",
 };
 
 export type Experiment = {
@@ -187,7 +188,7 @@ export type FileItem = {
   filename: string; // original upload name
   stored_name: string; // safe name on disk under uploads/
   mime: string;
-  kind: "image" | "pdf";
+  kind: "image" | "pdf" | "zip" | "markdown";
   size: number | null;
   created_at: string;
 };
@@ -214,6 +215,49 @@ export type PinnedLink = {
   note: string | null;
   sort_order: number;
   created_at: string;
+};
+
+// ── Quizzes (self-test over a Markdown file, QUIZ_DIR) ───────
+
+export type QuizOption = { text: string; correct: boolean };
+
+export type QuizQuestion = {
+  prompt: string;
+  options: QuizOption[];
+  explanation: string | null;
+  multi: boolean; // more than one correct option → multi-select
+};
+
+export type Quiz = {
+  slug: string; // bare filename, no extension
+  path: string; // relative to QUIZ_DIR
+  title: string;
+  topic: string | null; // vault relpath of the note this quiz tests
+  questions: QuizQuestion[];
+};
+
+export type QuizMeta = {
+  slug: string;
+  title: string;
+  topic: string | null;
+  count: number;
+};
+
+export type QuizAttempt = {
+  id: number;
+  slug: string;
+  title: string;
+  score: number;
+  total: number;
+  created_at: string;
+};
+
+// Per-quiz roll-up for the list page.
+export type QuizStat = {
+  attempts: number;
+  bestPct: number;
+  lastPct: number;
+  lastAt: string;
 };
 
 // Where the logout button sends the browser. For Cloudflare Access, set

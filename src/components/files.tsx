@@ -31,9 +31,28 @@ async function api(url: string, init?: RequestInit) {
   return data;
 }
 
-const ACCEPT = /^image\/(png|jpe?g|gif|webp)$|^application\/pdf$/;
+const ACCEPT =
+  /^image\/(png|jpe?g|gif|webp)$|^application\/pdf$|^application\/(x-)?zip(-compressed)?$|^application\/(x-)?gzip$|^application\/x-(tar|compressed-tar)$|^text\/(x-)?markdown$/;
+// Browsers often report an empty or generic MIME for archives / .md, so fall
+// back to the extension (matches .tar.gz via its .gz tail).
+const ACCEPT_EXT = /\.(zip|gz|tgz|tar|md|markdown)$/i;
 function acceptable(f: File) {
-  return ACCEPT.test(f.type);
+  return ACCEPT.test(f.type) || ACCEPT_EXT.test(f.name);
+}
+// Short uppercase badge shown on the non-image thumbnail card. For archives
+// (the generic "zip" kind) show the real extension so .tar.gz isn't mislabelled.
+function kindLabel(file: FileItem): string {
+  if (file.kind === "pdf") return "PDF";
+  if (file.kind === "markdown") return "MD";
+  if (file.kind === "zip") {
+    const name = file.filename.toLowerCase();
+    if (name.endsWith(".tar.gz")) return "TAR.GZ";
+    if (name.endsWith(".tgz")) return "TGZ";
+    if (name.endsWith(".gz")) return "GZ";
+    if (name.endsWith(".tar")) return "TAR";
+    return "ZIP";
+  }
+  return "FILE";
 }
 function extFor(mime: string) {
   return mime === "application/pdf"
@@ -148,7 +167,7 @@ export function FilesBrowser({
       )}
       <PageHeader
         title="Files"
-        subtitle="Upload, drag, or paste (⌘V) images and PDFs — organise them in folders."
+        subtitle="Upload, drag, or paste (⌘V) images, PDFs, archives, and Markdown — organise them in folders."
         action={
           <div className="flex items-center gap-2">
             <button
@@ -427,7 +446,7 @@ function FileCard({
           <div className="flex flex-col items-center gap-1 text-faint">
             <FileText className="size-8" />
             <span className="text-[10px] font-medium uppercase tracking-wider">
-              PDF
+              {kindLabel(file)}
             </span>
           </div>
         )}
@@ -587,11 +606,11 @@ function UploadDialog({
           {file ? (
             <span className="break-all font-medium text-text">{file.name}</span>
           ) : (
-            <span>Choose, drop, or paste an image or PDF</span>
+            <span>Choose, drop, or paste an image, PDF, archive, or Markdown file</span>
           )}
           <input
             type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp,application/pdf"
+            accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,application/zip,application/gzip,application/x-tar,text/markdown,.zip,.gz,.tgz,.tar,.tar.gz,.md,.markdown"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0] ?? null;
@@ -714,6 +733,20 @@ function Viewer({
               alt={file.title}
               className="max-h-[70vh] max-w-full object-contain"
             />
+          ) : file.kind === "zip" ? (
+            <div className="flex flex-col items-center gap-3 p-8 text-faint">
+              <FileText className="size-12" />
+              <span className="text-sm">
+                Archives can’t be previewed — download to open.
+              </span>
+              <a
+                href={src}
+                download={file.filename}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[13px] font-medium hover:border-accent hover:text-accent"
+              >
+                <Download className="size-4" /> Download
+              </a>
+            </div>
           ) : (
             <iframe
               src={src}

@@ -75,10 +75,15 @@ export function CommandPalette() {
 
   const close = () => setOpen(false);
   // Pin results carry an external URL rather than an app route — those open
-  // in a new tab, everything else is a client-side navigation.
+  // in a new tab. Note results (note:YYYY-MM-DD) open the Distraction Sheet
+  // drawer on that date via its event. Everything else navigates client-side.
   const go = (href: string) => {
     close();
     if (/^https?:\/\//i.test(href)) window.open(href, "_blank", "noopener");
+    else if (href.startsWith("note:"))
+      window.dispatchEvent(
+        new CustomEvent("distraction:open", { detail: href.slice(5) }),
+      );
     else router.push(href);
   };
 

@@ -535,6 +535,24 @@ export function globalSearch(q: string): SearchResult[] {
       href: `/guides?id=${r.id}`,
     });
 
+  // Daily notes (Distraction Sheet). href uses the note: pseudo-scheme — the
+  // sheet is a drawer, not a route, so the palette dispatches a
+  // `distraction:open` event for these instead of navigating.
+  for (const r of rows(
+    "SELECT date, content FROM daily_notes WHERE content LIKE ? ESCAPE '\\' ORDER BY date DESC LIMIT 5",
+  )) {
+    const i = r.content.toLowerCase().indexOf(term.toLowerCase());
+    const from = Math.max(0, i - 20);
+    out.push({
+      type: "Note",
+      title: r.date,
+      subtitle:
+        (from > 0 ? "…" : "") +
+        r.content.slice(from, from + 70).replace(/\s+/g, " ").trim(),
+      href: `note:${r.date}`,
+    });
+  }
+
   // Pins match on the URL too, so "cloudflare" finds the dashboard pin even
   // when its title doesn't say so. href is the external URL, not a route.
   for (const r of db

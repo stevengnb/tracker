@@ -22,6 +22,19 @@ export function DistractionSheet() {
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Open on a specific date from elsewhere (command palette Note results).
+  // A pending autosave is safe across this date jump: onChange captured its
+  // own forDate, and the load effect resets the dirty flag.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const d = (e as CustomEvent<string>).detail;
+      if (d) setDate(d);
+      setRender(true);
+    };
+    window.addEventListener("distraction:open", onOpen);
+    return () => window.removeEventListener("distraction:open", onOpen);
+  }, []);
+
   // Trigger the slide-in on the frame after the panel mounts.
   useEffect(() => {
     if (!render) return;

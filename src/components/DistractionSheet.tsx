@@ -2,6 +2,7 @@
 
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
+import { useMounted } from "@/lib/mounted";
 import { ChevronLeft, ChevronRight, NotebookPen, X } from "lucide-react";
 import { addDays, dayName, fmtMedium, todayStr } from "@/lib/dates";
 
@@ -11,7 +12,7 @@ type Status = "idle" | "loading" | "saving" | "saved";
 // (portaled to body so the header's backdrop-filter doesn't clip it), with a
 // custom ‹ day/date › navigator instead of the native date input. Autosaves.
 export function DistractionSheet() {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [render, setRender] = useState(false); // portal present (through slide-out)
   const [shown, setShown] = useState(false); // slid-in vs off-screen
   const [date, setDate] = useState(todayStr());
@@ -20,8 +21,6 @@ export function DistractionSheet() {
   const [status, setStatus] = useState<Status>("idle");
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => setMounted(true), []);
 
   // Trigger the slide-in on the frame after the panel mounts.
   useEffect(() => {

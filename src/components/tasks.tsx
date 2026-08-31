@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useMounted } from "@/lib/mounted";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -119,15 +120,13 @@ export function TaskRow({ task }: { task: Task }) {
   const [pending, start] = useTransition();
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState(!!task.description);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [note, setNote] = useState(task.description ?? "");
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [linksLoaded, setLinksLoaded] = useState(false);
   const [picking, setPicking] = useState(false);
   const closeRef = useRef<() => void>(() => {});
   const done = task.status === "done";
-
-  useEffect(() => setMounted(true), []);
 
   // Lock scroll + close on Esc while the notes modal is open.
   useEffect(() => {

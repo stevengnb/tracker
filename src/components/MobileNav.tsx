@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useMounted } from "@/lib/mounted";
 import { createPortal } from "react-dom";
 import { Brain, LogOut, Menu, Settings as SettingsIcon, X } from "lucide-react";
 import { LOGOUT_URL } from "@/lib/types";
@@ -11,13 +12,11 @@ import { arrangeNav, isActive } from "./nav";
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [settings] = useSettings();
   const pathname = usePathname();
 
   const nav = arrangeNav(settings.sidebarOrder, settings.sidebarHidden);
-
-  useEffect(() => setMounted(true), []);
 
   // Close the drawer on navigation and lock scroll while open.
   useEffect(() => setOpen(false), [pathname]);

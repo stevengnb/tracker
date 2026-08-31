@@ -51,7 +51,11 @@ export function QuizList({
           {quizzes.map((q) => {
             const s = stats[q.slug];
             return (
-              <Link key={q.slug} href={`/quiz?slug=${q.slug}`} className="group">
+              <Link
+                key={q.slug}
+                href={`/quiz?slug=${encodeURIComponent(q.slug)}`}
+                className="group"
+              >
                 <Card className="h-full transition-colors group-hover:border-accent">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2">
@@ -122,13 +126,15 @@ export function QuizRunner({
   const answeredCount = Object.values(picked).filter((s) => s.size > 0).length;
   const allAnswered = answeredCount === quiz.questions.length;
 
-  const score = revealed
-    ? quiz.questions.reduce(
-        (n, _q, qi) =>
-          n + (isRight(picked[qi] ?? new Set(), correctSets[qi]) ? 1 : 0),
-        0,
-      )
-    : 0;
+  // Single source of truth for the score — submit() saves this same value, so
+  // the saved attempt can never disagree with what's on screen.
+  const computeScore = () =>
+    quiz.questions.reduce(
+      (n, _q, qi) =>
+        n + (isRight(picked[qi] ?? new Set(), correctSets[qi]) ? 1 : 0),
+      0,
+    );
+  const score = revealed ? computeScore() : 0;
 
   function choose(qi: number, oi: number, multi: boolean) {
     if (revealed) return;
@@ -146,18 +152,14 @@ export function QuizRunner({
   }
 
   async function submit() {
-    const total = quiz.questions.length;
-    const s = quiz.questions.reduce(
-      (n, _q, qi) =>
-        n + (isRight(picked[qi] ?? new Set(), correctSets[qi]) ? 1 : 0),
-      0,
-    );
+    const s = computeScore();
     setRevealed(true);
     setSaving(true);
+    // total is derived server-side from the quiz file, so it isn't sent.
     await api("/api/quiz-attempt", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug: quiz.slug, score: s, total }),
+      body: JSON.stringify({ slug: quiz.slug, score: s }),
     });
     setSaving(false);
     router.refresh(); // refresh the attempt history below

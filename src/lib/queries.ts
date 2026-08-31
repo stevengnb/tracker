@@ -720,8 +720,8 @@ export function getQuizStats(): Record<string, QuizStat> {
     .prepare(
       `SELECT slug,
               COUNT(*)                                   AS attempts,
-              MAX(CASE WHEN total > 0 THEN score * 100 / total ELSE 0 END) AS bestPct,
-              (SELECT score * 100 / total FROM quiz_attempts b
+              MAX(CASE WHEN total > 0 THEN ROUND(score * 100.0 / total) ELSE 0 END) AS bestPct,
+              (SELECT ROUND(score * 100.0 / total) FROM quiz_attempts b
                  WHERE b.slug = a.slug AND b.total > 0
                  ORDER BY created_at DESC LIMIT 1)        AS lastPct,
               MAX(created_at)                             AS lastAt

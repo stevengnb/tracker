@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { useMounted } from "@/lib/mounted";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Plus, Trash2, X } from "lucide-react";
 import { EVENT_COLORS, type EventItem } from "@/lib/types";
@@ -270,9 +271,8 @@ function EventModal({
   const [color, setColor] = useState(event?.color ?? EVENT_COLORS[0]);
   const [recur, setRecur] = useState(event?.recur ?? "");
   const [pending, start] = useTransition();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
 
-  useEffect(() => setMounted(true), []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);

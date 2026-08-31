@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useMounted } from "@/lib/mounted";
 import { createPortal } from "react-dom";
 import { CornerDownLeft, Search } from "lucide-react";
 import { NAV } from "./nav";
@@ -11,14 +12,12 @@ type Item = { section: string; label: string; sub?: string; run: () => void };
 
 export function CommandPalette() {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Result[]>([]);
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => setMounted(true), []);
 
   // Global open shortcut (⌘/Ctrl+K) + a custom event (from the topbar button).
   useEffect(() => {

@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useMounted } from "@/lib/mounted";
 import { createPortal } from "react-dom";
 import { registerConfirm, type ConfirmRequest } from "@/lib/confirm";
 
 export function ConfirmHost() {
   const [active, setActive] = useState<ConfirmRequest | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
 
-  useEffect(() => setMounted(true), []);
   useEffect(() => registerConfirm((req) => setActive(req)), []);
 
   const close = (ok: boolean) => {

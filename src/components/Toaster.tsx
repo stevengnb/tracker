@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useMounted } from "@/lib/mounted";
 import { createPortal } from "react-dom";
 import { CheckCircle2, Info, X, XCircle } from "lucide-react";
 import { subscribeToast, type ToastItem } from "@/lib/toast";
 
 export function Toaster() {
   const [items, setItems] = useState<ToastItem[]>([]);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
 
-  useEffect(() => setMounted(true), []);
   useEffect(
     () =>
       subscribeToast((t) => {

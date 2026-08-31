@@ -6,7 +6,10 @@ import type { Quiz, QuizMeta, QuizQuestion } from "./types";
 // self-test for a learning note: numbered questions with `- [ ]` / `- [x]`
 // task-list options and an optional `>` explanation. The app never writes here.
 export function quizDir(): string {
-  return process.env.QUIZ_DIR ?? "/srv/shared/etc/quizzes";
+  // normalize() strips a trailing slash from the env value — without it the
+  // containment check in readQuiz compares against "…/quizzes//" and rejects
+  // every quiz.
+  return path.normalize(process.env.QUIZ_DIR ?? "/srv/shared/etc/quizzes");
 }
 
 // A slug is a bare filename (no path separators, no traversal). Reject anything

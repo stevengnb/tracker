@@ -13,10 +13,11 @@ export async function POST(req: NextRequest) {
   const quiz = readQuiz(slug);
   if (!quiz) return fail("unknown quiz", 404);
 
+  // total comes from the quiz file, not the request body — a client-supplied
+  // total could record a 100% attempt on a 20-question quiz.
+  const total = quiz.questions.length;
   const score = Number(data.score);
-  const total = Number(data.total);
-  if (!Number.isInteger(score) || !Number.isInteger(total) || total <= 0)
-    return fail("score and total must be positive integers");
+  if (!Number.isInteger(score)) return fail("score must be an integer");
   if (score < 0 || score > total) return fail("score out of range");
 
   try {
@@ -25,7 +26,9 @@ export async function POST(req: NextRequest) {
         "INSERT INTO quiz_attempts (slug, title, score, total) VALUES (?, ?, ?, ?)",
       )
       .run(quiz.slug, quiz.title, score, total);
-    return isForm ? formRedirect(req, `/quiz?slug=${quiz.slug}`) : ok();
+    return isForm
+      ? formRedirect(req, `/quiz?slug=${encodeURIComponent(quiz.slug)}`)
+      : ok();
   } catch (e) {
     return fail(e instanceof Error ? e.message : "write failed", 500);
   }

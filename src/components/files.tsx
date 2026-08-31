@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useMounted } from "@/lib/mounted";
 import { createPortal } from "react-dom";
 import {
   ChevronRight,
@@ -778,8 +779,7 @@ function Overlay({
   children: React.ReactNode;
   onClose: () => void;
 }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useMounted();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();

@@ -5,17 +5,21 @@ import { useState, useTransition } from "react";
 import {
   Check,
   FileText,
+  Gift,
+  ListChecks,
   Link2,
   Paperclip,
   Pencil,
   Plus,
   StickyNote,
+  Target,
   Trash2,
   X,
 } from "lucide-react";
-import type { Goal, GoalAttachment } from "@/lib/types";
+import type { Goal, GoalAttachment, GoalItem } from "@/lib/types";
 import { Badge, Card, Progress, statusTone } from "./ui";
 import { toast } from "@/lib/toast";
+import { confirmDialog } from "@/lib/confirm";
 
 async function api(url: string, init?: RequestInit) {
   const res = await fetch(url, init);
@@ -24,12 +28,45 @@ async function api(url: string, init?: RequestInit) {
   return data;
 }
 
-export function AddGoal({ month }: { month: string }) {
+// Segmented target/checklist picker, shared by the add form.
+function KindToggle({
+  kind,
+  onChange,
+}: {
+  kind: "target" | "checklist";
+  onChange: (k: "target" | "checklist") => void;
+}) {
+  return (
+    <div className="flex gap-1 rounded-lg border border-line bg-card p-1">
+      {(
+        [
+          ["target", "Target", Target],
+          ["checklist", "Checklist", ListChecks],
+        ] as const
+      ).map(([k, label, Icon]) => (
+        <button
+          key={k}
+          type="button"
+          onClick={() => onChange(k)}
+          className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${
+            kind === k ? "bg-accent text-white" : "text-muted hover:text-text"
+          }`}
+        >
+          <Icon className="size-3.5" /> {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function AddGoal({ period }: { period: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
+  const [kind, setKind] = useState<"target" | "checklist">("target");
   const [target, setTarget] = useState("");
   const [unit, setUnit] = useState("");
+  const [reward, setReward] = useState("");
   const [pending, start] = useTransition();
   if (!open) {
     return (
@@ -50,14 +87,18 @@ export function AddGoal({ month }: { month: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title.trim(),
-          month,
-          target_value: target || null,
-          unit: unit || null,
+          period,
+          kind,
+          target_value: kind === "target" ? target || null : null,
+          unit: kind === "target" ? unit || null : null,
+          reward: reward.trim() || null,
         }),
       });
       setTitle("");
       setTarget("");
       setUnit("");
+      setReward("");
+      setKind("target");
       setOpen(false);
       router.refresh();
     });
@@ -71,18 +112,29 @@ export function AddGoal({ month }: { month: string }) {
         autoFocus
         className="min-w-48 rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
       />
+      <KindToggle kind={kind} onChange={setKind} />
+      {kind === "target" && (
+        <>
+          <input
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            placeholder="Target"
+            type="number"
+            className="w-24 rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
+          />
+          <input
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            placeholder="Unit"
+            className="w-24 rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
+          />
+        </>
+      )}
       <input
-        value={target}
-        onChange={(e) => setTarget(e.target.value)}
-        placeholder="Target"
-        type="number"
-        className="w-24 rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
-      />
-      <input
-        value={unit}
-        onChange={(e) => setUnit(e.target.value)}
-        placeholder="Unit"
-        className="w-24 rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
+        value={reward}
+        onChange={(e) => setReward(e.target.value)}
+        placeholder="Reward (optional)"
+        className="min-w-40 flex-1 rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
       />
       <button
         disabled={pending}
@@ -116,7 +168,7 @@ export function GoalActions({ goal }: { goal: Goal }) {
     });
   return (
     <div className={`flex items-center gap-2 ${pending ? "opacity-50" : ""}`}>
-      {goal.target_value != null && goal.status === "active" && (
+      {goal.kind === "target" && goal.target_value != null && goal.status === "active" && (
         <span className="flex items-center gap-1">
           <input
             value={progress}
@@ -168,9 +220,11 @@ export function GoalActions({ goal }: { goal: Goal }) {
 export function GoalCard({
   goal,
   attachments,
+  items = [],
 }: {
   goal: Goal;
   attachments: GoalAttachment[];
+  items?: GoalItem[];
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -180,6 +234,7 @@ export function GoalCard({
     goal.target_value != null ? String(goal.target_value) : "",
   );
   const [unit, setUnit] = useState(goal.unit ?? "");
+  const [reward, setReward] = useState(goal.reward ?? "");
   const [pending, start] = useTransition();
 
   const save = (e: React.FormEvent) => {
@@ -192,11 +247,29 @@ export function GoalCard({
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim() || null,
-          target_value: target.trim() === "" ? null : Number(target),
-          unit: unit.trim() || null,
+          reward: reward.trim() || null,
+          ...(goal.kind === "target"
+            ? {
+                target_value: target.trim() === "" ? null : Number(target),
+                unit: unit.trim() || null,
+              }
+            : {}),
         }),
       });
       setEditing(false);
+      router.refresh();
+    });
+  };
+
+  const remove = async () => {
+    const ok = await confirmDialog({
+      message: `Delete goal “${goal.title}”?`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    start(async () => {
+      await api(`/api/goals/${goal.id}`, { method: "DELETE" });
       router.refresh();
     });
   };
@@ -219,21 +292,29 @@ export function GoalCard({
             rows={2}
             className="resize-y rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
           />
-          <div className="flex gap-2">
-            <input
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              placeholder="Target"
-              type="number"
-              className="w-28 rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
-            />
-            <input
-              value={unit}
-              onChange={(e) => setUnit(e.target.value)}
-              placeholder="Unit"
-              className="w-28 rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
-            />
-          </div>
+          {goal.kind === "target" && (
+            <div className="flex gap-2">
+              <input
+                value={target}
+                onChange={(e) => setTarget(e.target.value)}
+                placeholder="Target"
+                type="number"
+                className="w-28 rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
+              />
+              <input
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                placeholder="Unit"
+                className="w-28 rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
+              />
+            </div>
+          )}
+          <input
+            value={reward}
+            onChange={(e) => setReward(e.target.value)}
+            placeholder="Reward (optional)"
+            className="rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
+          />
           <div className="flex gap-2">
             <button
               disabled={pending}
@@ -254,11 +335,18 @@ export function GoalCard({
     );
   }
 
+  const doneItems = items.filter((i) => i.done).length;
+
   return (
     <Card>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
+            {goal.kind === "checklist" ? (
+              <ListChecks className="size-3.5 shrink-0 text-faint" />
+            ) : (
+              <Target className="size-3.5 shrink-0 text-faint" />
+            )}
             <span
               className={`text-[14px] font-medium ${goal.status !== "active" ? "text-faint line-through" : ""}`}
             >
@@ -277,6 +365,7 @@ export function GoalCard({
               setDescription(goal.description ?? "");
               setTarget(goal.target_value != null ? String(goal.target_value) : "");
               setUnit(goal.unit ?? "");
+              setReward(goal.reward ?? "");
               setEditing(true);
             }}
             title="Edit goal"
@@ -284,16 +373,154 @@ export function GoalCard({
           >
             <Pencil className="size-3.5" />
           </button>
+          <button
+            onClick={remove}
+            title="Delete goal"
+            className="text-faint transition-colors hover:text-bad"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
           <GoalActions goal={goal} />
         </div>
       </div>
-      {goal.target_value != null && (
+      {goal.kind === "target" && goal.target_value != null && (
         <div className="mt-3">
           <Progress value={goal.current_value} max={goal.target_value} />
         </div>
       )}
+      {goal.kind === "checklist" && (
+        <div className="mt-3">
+          {items.length > 0 && (
+            <>
+              <div className="mb-1 flex justify-between text-[11px] text-faint">
+                <span>Checklist</span>
+                <span className="tabular-nums">
+                  {doneItems}/{items.length}
+                </span>
+              </div>
+              <Progress value={doneItems} max={items.length} />
+            </>
+          )}
+          <GoalItems goalId={goal.id} items={items} />
+        </div>
+      )}
+      {goal.reward && (
+        <div
+          className={`mt-3 flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] ${
+            goal.status === "done"
+              ? "border-good/40 bg-good/10 text-good"
+              : "border-line bg-accent-soft text-accent"
+          }`}
+          title={goal.status === "done" ? "Earned!" : "Reward when completed"}
+        >
+          <Gift className="size-3.5 shrink-0" />
+          <span className="font-medium">Reward:</span>
+          <span className="min-w-0 truncate">{goal.reward}</span>
+        </div>
+      )}
       <Attachments goalId={goal.id} items={attachments} />
     </Card>
+  );
+}
+
+function GoalItems({
+  goalId,
+  items,
+}: {
+  goalId: number;
+  items: GoalItem[];
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [adding, setAdding] = useState(false);
+  const [label, setLabel] = useState("");
+
+  const toggle = (it: GoalItem) =>
+    start(async () => {
+      await api(`/api/goals/${goalId}/items/${it.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toggle: true }),
+      });
+      router.refresh();
+    });
+  const remove = (it: GoalItem) =>
+    start(async () => {
+      await api(`/api/goals/${goalId}/items/${it.id}`, { method: "DELETE" });
+      router.refresh();
+    });
+  const add = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!label.trim()) return;
+    start(async () => {
+      await api(`/api/goals/${goalId}/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: label.trim() }),
+      });
+      setLabel("");
+      router.refresh();
+    });
+  };
+
+  return (
+    <div className={`mt-2 flex flex-col gap-0.5 ${pending ? "opacity-50" : ""}`}>
+      {items.map((it) => (
+        <div key={it.id} className="group flex items-center gap-2 py-0.5">
+          <button
+            onClick={() => toggle(it)}
+            title={it.done ? "Mark undone" : "Mark done"}
+            className={`flex size-4 shrink-0 items-center justify-center rounded border transition-colors ${
+              it.done
+                ? "border-accent bg-accent text-white"
+                : "border-line hover:border-accent"
+            }`}
+          >
+            {it.done && <Check className="size-3" />}
+          </button>
+          <span
+            className={`min-w-0 flex-1 truncate text-[13px] ${it.done ? "text-faint line-through" : ""}`}
+          >
+            {it.label}
+          </span>
+          <button
+            onClick={() => remove(it)}
+            title="Delete item"
+            className="text-faint hover:text-bad sm:opacity-0 sm:group-hover:opacity-100"
+          >
+            <Trash2 className="size-3" />
+          </button>
+        </div>
+      ))}
+      {adding ? (
+        <form onSubmit={add} className="mt-1 flex gap-2">
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Checklist item…"
+            autoFocus
+            className="min-w-0 flex-1 rounded-md border border-line bg-card px-2 py-1 text-[12px] outline-none focus:border-accent"
+          />
+          <button disabled={pending} className="text-[12px] text-accent">
+            add
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdding(false)}
+            className="text-faint"
+          >
+            <X className="size-3.5" />
+          </button>
+        </form>
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          className="mt-1 w-fit text-[11px] text-faint hover:text-accent"
+        >
+          + item
+        </button>
+      )}
+    </div>
   );
 }
 

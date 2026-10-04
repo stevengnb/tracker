@@ -1,24 +1,28 @@
 import { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
-import { currentMonth } from "@/lib/dates";
+import { currentQuarter } from "@/lib/dates";
 import { fail, formRedirect, ok, readBody } from "@/lib/api";
 
 export async function POST(req: NextRequest) {
   const { data, isForm } = await readBody(req);
   const title = (data.title ?? "").trim();
   if (!title) return fail("title is required");
+  const kind = data.kind === "checklist" ? "checklist" : "target";
   try {
     getDb()
       .prepare(
-        `INSERT INTO goals (title, month, description, target_value, unit)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO goals (title, period, description, kind, target_value, unit, reward)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         title,
-        data.month || currentMonth(),
+        data.period || currentQuarter(),
         data.description || null,
-        data.target_value ? Number(data.target_value) : null,
-        data.unit || null,
+        kind,
+        // target fields only apply to numeric goals
+        kind === "target" && data.target_value ? Number(data.target_value) : null,
+        kind === "target" ? data.unit || null : null,
+        (data.reward ?? "").trim() || null,
       );
     return isForm ? formRedirect(req, "/goals") : ok();
   } catch (e) {

@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
+// ── Host allowlist (DNS-rebinding guard) ────────────────────────────────────
+//
+// The origin listens on loopback with no in-app login, so a malicious page
+// whose domain re-resolves to 127.0.0.1 would otherwise be "same-origin" with
+// this app and could read everything. Browsers can't forge Host, so only
+// answering known hostnames closes that. Opt-in: set ALLOWED_HOSTS (comma-
+// separated, e.g. "portal.example.com"); loopback names are always allowed
+// for local tools/scripts.
+
+const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const EXTRA_HOSTS = new Set(
+  (process.env.ALLOWED_HOSTS ?? "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+function hostAllowed(req: NextRequest): boolean {
+  if (!EXTRA_HOSTS.size) return true;
+  const host = (req.headers.get("host") ?? "").toLowerCase();
+  const name = host.replace(/:\d+$/, "");
+  return LOOPBACK.has(name) || EXTRA_HOSTS.has(name);
+}
+
 // ── Same-origin gate for state-mutating requests (CSRF) ─────────────────────
 //
 // Runs unconditionally (independent of the CF Access flags below). The app
@@ -82,6 +106,9 @@ async function cfAccessAllowed(req: NextRequest): Promise<boolean> {
 }
 
 export default async function proxy(req: NextRequest) {
+  if (!hostAllowed(req)) {
+    return new NextResponse("unknown host", { status: 421 });
+  }
   if (!sameOriginAllowed(req)) {
     return NextResponse.json(
       { ok: false, error: "forbidden origin" },

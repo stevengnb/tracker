@@ -28,6 +28,10 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       fields.push("pinned = ?");
       values.push(body.pinned ? 1 : 0);
     }
+    if ("archived" in body) {
+      fields.push("archived = ?");
+      values.push(body.archived ? 1 : 0);
+    }
     if (!fields.length) return fail("nothing to update");
     fields.push("updated_at = CURRENT_TIMESTAMP");
     getDb()

@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Check, ExternalLink, Plus, RotateCcw, Trash2 } from "lucide-react";
-import type { WatchlistItem } from "@/lib/types";
+import { Check, ExternalLink, Eraser, Plus, RotateCcw, Trash2 } from "lucide-react";
+import type { QueueBucket, WatchlistItem } from "@/lib/types";
 import { QUEUE_CATEGORIES, QUEUE_CATEGORY_LABELS } from "@/lib/types";
 import { Select } from "./Select";
 import { toast } from "@/lib/toast";
@@ -25,11 +25,17 @@ function domain(url: string): string {
   }
 }
 
-export function AddQueueItem({ kind }: { kind: "watch" | "read" }) {
+export function AddQueueItem({
+  kind,
+  bucket = "queue",
+}: {
+  kind: "watch" | "read";
+  bucket?: QueueBucket;
+}) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
-  const [category, setCategory] = useState(QUEUE_CATEGORIES[kind][0]);
+  const [category, setCategory] = useState(QUEUE_CATEGORIES[bucket][kind][0]);
   const [pending, start] = useTransition();
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +49,7 @@ export function AddQueueItem({ kind }: { kind: "watch" | "read" }) {
           url: url.trim() || null,
           kind,
           category,
+          bucket,
         }),
       });
       setTitle("");
@@ -68,7 +75,7 @@ export function AddQueueItem({ kind }: { kind: "watch" | "read" }) {
         value={category}
         onChange={setCategory}
         className="w-36"
-        options={QUEUE_CATEGORIES[kind].map((c) => ({
+        options={QUEUE_CATEGORIES[bucket][kind].map((c) => ({
           value: c,
           label: QUEUE_CATEGORY_LABELS[c] ?? c,
         }))}
@@ -80,6 +87,49 @@ export function AddQueueItem({ kind }: { kind: "watch" | "read" }) {
         <Plus className="size-4" /> Add
       </button>
     </form>
+  );
+}
+
+// Bulk-delete every watched/read item in the current bucket + kind. Only shown
+// when there's something to sweep.
+export function ClearDone({
+  bucket,
+  kind,
+  count,
+}: {
+  bucket: QueueBucket;
+  kind: "watch" | "read";
+  count: number;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  if (count < 1) return null;
+  const label = kind === "read" ? "read" : "watched";
+  const clear = async () => {
+    const ok = await confirmDialog({
+      message: `Delete ${count} ${label} item${count === 1 ? "" : "s"}? This can’t be undone.`,
+      confirmLabel: "Clear",
+      danger: true,
+    });
+    if (!ok) return;
+    start(async () => {
+      await api("/api/watchlist/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bucket, kind }),
+      });
+      router.refresh();
+    });
+  };
+  return (
+    <button
+      onClick={clear}
+      disabled={pending}
+      title={`Delete all ${label} items`}
+      className="ml-auto flex items-center gap-1 rounded-full px-3 py-1 text-[12px] text-muted transition-colors hover:bg-bad/10 hover:text-bad disabled:opacity-50"
+    >
+      <Eraser className="size-3.5" /> Clear {label} ({count})
+    </button>
   );
 }
 

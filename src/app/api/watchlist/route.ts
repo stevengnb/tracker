@@ -7,12 +7,13 @@ export async function POST(req: NextRequest) {
   const title = (data.title ?? "").trim();
   if (!title) return fail("title is required");
   const kind = data.kind === "read" ? "read" : "watch";
+  const bucket = data.bucket === "entertainment" ? "entertainment" : "queue";
   const category = (data.category ?? "").trim() || (kind === "read" ? "article" : "general");
   const status = kind === "read" ? "to-read" : "to-watch";
   try {
     getDb()
       .prepare(
-        "INSERT INTO watchlist_items (title, url, kind, category, subcategory, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO watchlist_items (title, url, kind, category, subcategory, status, notes, bucket) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         title,
@@ -22,8 +23,11 @@ export async function POST(req: NextRequest) {
         data.subcategory || null,
         status,
         data.notes || null,
+        bucket,
       );
-    return isForm ? formRedirect(req, "/queue") : ok();
+    return isForm
+      ? formRedirect(req, bucket === "entertainment" ? "/entertainment" : "/queue")
+      : ok();
   } catch (e) {
     return fail(e instanceof Error ? e.message : "write failed", 500);
   }

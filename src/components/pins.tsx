@@ -123,18 +123,21 @@ function PinCard({
   const [editing, setEditing] = useState(false);
   const [pending, start] = useTransition();
 
-  const remove = () =>
+  // Confirm OUTSIDE the transition — see guides.tsx: awaiting the dialog inside
+  // startTransition leaves isPending stuck and the deleted row never clears.
+  const remove = async () => {
+    const okDel = await confirmDialog({
+      title: "Delete pin",
+      message: `Remove “${pin.title}”? This can't be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!okDel) return;
     start(async () => {
-      const okDel = await confirmDialog({
-        title: "Delete pin",
-        message: `Remove “${pin.title}”? This can't be undone.`,
-        confirmLabel: "Delete",
-        danger: true,
-      });
-      if (!okDel) return;
       await api(`/api/pins/${pin.id}`, { method: "DELETE" });
       router.refresh();
     });
+  };
 
   if (editing) {
     return (

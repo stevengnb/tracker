@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useMounted } from "@/lib/mounted";
 import { createPortal } from "react-dom";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ChevronRight,
   Download,
@@ -92,30 +94,32 @@ export function FilesBrowser({
   const [addingFolder, setAddingFolder] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [seedFile, setSeedFile] = useState<File | null>(null);
+  const [seedFiles, setSeedFiles] = useState<File[] | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [viewing, setViewing] = useState<FileItem | null>(openFile ?? null);
 
-  const openUploadWith = (f: File) => {
-    setSeedFile(f);
+  const openUploadWith = (fs: File[]) => {
+    setSeedFiles(fs);
     setUploading(true);
   };
   const closeUpload = () => {
     setUploading(false);
-    setSeedFile(null);
+    setSeedFiles(null);
   };
 
   // Paste (⌘/Ctrl+V) an image or PDF anywhere → open the upload dialog pre-filled.
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       if (viewing) return; // don't hijack paste inside the viewer's note field
+      const fs: File[] = [];
       for (const it of e.clipboardData?.items ?? []) {
         if (it.kind !== "file") continue;
         const f = it.getAsFile();
-        if (!f || !acceptable(f)) continue;
+        if (f && acceptable(f)) fs.push(named(f));
+      }
+      if (fs.length) {
         e.preventDefault();
-        openUploadWith(named(f));
-        return;
+        openUploadWith(fs);
       }
     };
     window.addEventListener("paste", onPaste);
@@ -125,8 +129,8 @@ export function FilesBrowser({
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragActive(false);
-    const f = Array.from(e.dataTransfer.files).find(acceptable);
-    if (f) openUploadWith(f);
+    const fs = Array.from(e.dataTransfer.files).filter(acceptable);
+    if (fs.length) openUploadWith(fs);
   };
 
   const createFolder = (e: React.FormEvent) => {
@@ -162,7 +166,7 @@ export function FilesBrowser({
       {dragActive && (
         <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-accent/10 backdrop-blur-[1px]">
           <div className="rounded-xl border-2 border-dashed border-accent bg-bg/90 px-6 py-4 text-[14px] font-medium text-accent">
-            Drop image or PDF to upload
+            Drop files to upload
           </div>
         </div>
       )}
@@ -269,11 +273,15 @@ export function FilesBrowser({
 
       {uploading && (
         <UploadDialog
-          // Remount when a new file is pasted/dropped while the dialog is open,
-          // so its seeded file + title refresh instead of being ignored.
-          key={seedFile ? `${seedFile.name}-${seedFile.size}` : "manual"}
+          // Remount when new files are pasted/dropped while the dialog is open,
+          // so the seeded files + title refresh instead of being ignored.
+          key={
+            seedFiles
+              ? seedFiles.map((f) => `${f.name}-${f.size}`).join("|")
+              : "manual"
+          }
           folderId={folderId}
-          initialFile={seedFile}
+          initialFiles={seedFiles}
           onClose={closeUpload}
           onDone={() => {
             closeUpload();
@@ -536,46 +544,75 @@ function FileCard({
 
 function UploadDialog({
   folderId,
-  initialFile,
+  initialFiles,
   onClose,
   onDone,
 }: {
   folderId: number | null;
-  initialFile?: File | null;
+  initialFiles?: File[] | null;
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [file, setFile] = useState<File | null>(initialFile ?? null);
-  const [title, setTitle] = useState(initialFile ? initialFile.name : "");
+  const [files, setFiles] = useState<File[]>(initialFiles ?? []);
+  // Title/note only apply to a single-file upload; a batch uses each filename.
+  const [title, setTitle] = useState(
+    initialFiles?.length === 1 ? initialFiles[0].name : "",
+  );
   const [note, setNote] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0); // 1-based index while uploading
   const [pending, start] = useTransition();
 
+  const single = files.length === 1;
+
   useEffect(() => {
-    if (file && file.type.startsWith("image/")) {
-      const url = URL.createObjectURL(file);
+    const f = files.length === 1 ? files[0] : null;
+    if (f && f.type.startsWith("image/")) {
+      const url = URL.createObjectURL(f);
       setPreview(url);
       return () => URL.revokeObjectURL(url);
     }
     setPreview(null);
-  }, [file]);
+  }, [files]);
+
+  const pick = (list: FileList | null) => {
+    const fs = Array.from(list ?? []);
+    if (!fs.length) return;
+    setFiles(fs);
+    if (fs.length === 1 && !title.trim()) setTitle(fs[0].name);
+  };
+
+  const removeAt = (i: number) =>
+    setFiles((prev) => prev.filter((_, j) => j !== i));
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) return;
+    if (!files.length) return;
     start(async () => {
-      const fd = new FormData();
-      fd.append("file", file);
-      if (folderId != null) fd.append("folder_id", String(folderId));
-      fd.append("title", title.trim() || file.name);
-      fd.append("note", note.trim());
-      const res = await fetch("/api/files", { method: "POST", body: fd });
-      const data = await res.json().catch(() => ({ ok: false }));
-      if (!data.ok) {
-        toast(data.error ?? "Upload failed");
-        return;
+      // One request per file: keeps the server's per-file validation intact
+      // and a batch of large files can't blow through the proxy body-size cap.
+      const failed: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        setProgress(i + 1);
+        const fd = new FormData();
+        fd.append("file", f);
+        if (folderId != null) fd.append("folder_id", String(folderId));
+        fd.append("title", single ? title.trim() || f.name : f.name);
+        fd.append("note", single ? note.trim() : "");
+        try {
+          const res = await fetch("/api/files", { method: "POST", body: fd });
+          const data = await res.json().catch(() => ({ ok: false }));
+          if (!data.ok)
+            failed.push(`${f.name}: ${data.error ?? "upload failed"}`);
+        } catch {
+          failed.push(`${f.name}: upload failed`);
+        }
       }
-      onDone();
+      setProgress(0);
+      if (failed.length) toast(failed.join(" · "));
+      // Anything that made it should show up — only stay open on total failure.
+      if (failed.length < files.length) onDone();
     });
   };
 
@@ -604,43 +641,79 @@ function UploadDialog({
           ) : (
             <Upload className="size-5 text-faint" />
           )}
-          {file ? (
-            <span className="break-all font-medium text-text">{file.name}</span>
+          {files.length === 0 ? (
+            <span>
+              Choose, drop, or paste images, PDFs, archives, or Markdown files
+            </span>
+          ) : single ? (
+            <span className="break-all font-medium text-text">
+              {files[0].name}
+            </span>
           ) : (
-            <span>Choose, drop, or paste an image, PDF, archive, or Markdown file</span>
+            <span className="font-medium text-text">
+              {files.length} files selected
+            </span>
           )}
           <input
             type="file"
+            multiple
             accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,application/zip,application/gzip,application/x-tar,text/markdown,.zip,.gz,.tgz,.tar,.tar.gz,.md,.markdown"
             className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              setFile(f);
-              if (f && !title.trim()) setTitle(f.name);
-            }}
+            onChange={(e) => pick(e.target.files)}
           />
         </label>
 
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Title"
-          className="mt-3 w-full rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none focus:border-accent"
-        />
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Note (optional)"
-          rows={2}
-          className="mt-2 w-full resize-y rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
-        />
+        {files.length > 1 && (
+          <ul className="mt-3 max-h-40 overflow-y-auto rounded-lg border border-line">
+            {files.map((f, i) => (
+              <li
+                key={`${f.name}-${f.size}-${i}`}
+                className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-[12px] last:border-0"
+              >
+                <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeAt(i)}
+                  aria-label={`Remove ${f.name}`}
+                  className="shrink-0 text-faint hover:text-bad"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {files.length <= 1 && (
+          <>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Title"
+              className="mt-3 w-full rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none focus:border-accent"
+            />
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Note (optional)"
+              rows={2}
+              className="mt-2 w-full resize-y rounded-lg border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-faint focus:border-accent"
+            />
+          </>
+        )}
 
         <div className="mt-4 flex gap-2">
           <button
-            disabled={!file || pending}
+            disabled={!files.length || pending}
             className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white disabled:opacity-50"
           >
-            {pending ? "Uploading…" : "Upload"}
+            {pending
+              ? files.length > 1
+                ? `Uploading ${progress}/${files.length}…`
+                : "Uploading…"
+              : files.length > 1
+                ? `Upload ${files.length} files`
+                : "Upload"}
           </button>
           <button
             type="button"
@@ -671,6 +744,26 @@ function Viewer({
   // prop is stale until the next full refresh.
   const saved = useRef({ title: file.title, note: file.note ?? "" });
   const src = `/uploads/${file.stored_name}`;
+
+  // Markdown is rendered in-app (themed via .wiki-prose) instead of an iframe:
+  // the browser's built-in text viewer follows the OS colour scheme, not the
+  // app's, so dark-mode users got white text on the viewer's white background.
+  const [md, setMd] = useState<string | null>(null);
+  useEffect(() => {
+    if (file.kind !== "markdown") return;
+    let cancelled = false;
+    fetch(src)
+      .then((r) => (r.ok ? r.text() : Promise.reject()))
+      .then((text) => {
+        if (!cancelled) setMd(text);
+      })
+      .catch(() => {
+        if (!cancelled) setMd("*Couldn’t load this file.*");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [file.kind, src]);
 
   const save = () => {
     const t = title.trim();
@@ -747,6 +840,18 @@ function Viewer({
               >
                 <Download className="size-4" /> Download
               </a>
+            </div>
+          ) : file.kind === "markdown" ? (
+            <div className="h-[70vh] w-full overflow-auto rounded-md border border-line bg-bg px-5 py-4">
+              {md != null ? (
+                <article className="wiki-prose">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {md}
+                  </ReactMarkdown>
+                </article>
+              ) : (
+                <p className="text-sm text-faint">Loading…</p>
+              )}
             </div>
           ) : (
             <iframe

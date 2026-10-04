@@ -17,7 +17,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       "target_value",
       "current_value",
       "unit",
-      "month",
+      "period",
+      "kind",
+      "reward",
     ]) {
       if (key in body) {
         fields.push(`${key} = ?`);

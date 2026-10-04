@@ -100,16 +100,33 @@ CREATE TABLE goal_attachments (
     FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
 );
 
+-- One list of goals per quarter (period = 'YYYY-Q1'..'YYYY-Q4'). A goal is
+-- either a numeric `target` (target_value/current_value/unit) or a `checklist`
+-- (its sub-items live in goal_items). kind carries a CHECK here for fresh DBs;
+-- the live DB uses a plain column (see the notebook note on CHECK migrations).
 CREATE TABLE goals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
-    month TEXT NOT NULL,
+    period TEXT NOT NULL,
     description TEXT,
     status TEXT DEFAULT 'active' CHECK(status IN ('active', 'done', 'abandoned')),
+    kind TEXT NOT NULL DEFAULT 'target' CHECK(kind IN ('target', 'checklist')),
     target_value REAL,
     current_value REAL DEFAULT 0,
     unit TEXT,
+    reward TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Checklist sub-items for goals whose kind = 'checklist'.
+CREATE TABLE goal_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
 );
 
 CREATE TABLE habit_log (
@@ -145,7 +162,11 @@ CREATE TABLE links (
 CREATE TABLE pageviews (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   path TEXT NOT NULL,
-  viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  -- Who/what sent the visit (NULL for rows logged before these existed).
+  user_email TEXT,
+  ip TEXT,
+  user_agent TEXT
 );
 
 CREATE TABLE guides (
@@ -154,6 +175,7 @@ CREATE TABLE guides (
   category TEXT NOT NULL DEFAULT 'General',
   content TEXT NOT NULL DEFAULT '',
   pinned INTEGER NOT NULL DEFAULT 0,
+  archived INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -179,6 +201,9 @@ CREATE TABLE "watchlist_items" (
   status TEXT NOT NULL DEFAULT 'to-watch'
       CHECK(status IN ('to-watch','watched','to-read','read','dropped')),
   notes TEXT,
+  -- Top-level partition: the productive Queue vs the Entertainment tab. Plain
+  -- TEXT (no CHECK) on purpose so new buckets never need a table-recreate.
+  bucket TEXT NOT NULL DEFAULT 'queue',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -208,6 +233,15 @@ CREATE TABLE quiz_attempts (
 );
 
 -- Indexes
+-- UI preferences (sidebar order/hidden, clocks, Today layout), shared by every
+-- device. A single row holding JSON; its shape is `Settings` in
+-- src/lib/settings.ts (unknown/missing keys fall back to the defaults there).
+CREATE TABLE app_settings (
+  id INTEGER PRIMARY KEY CHECK(id = 1),
+  data TEXT NOT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX idx_attachments_goal ON goal_attachments(goal_id);
 CREATE INDEX idx_attempts_challenge ON attempts(challenge_id);
 CREATE INDEX idx_challenges_date ON challenges(date DESC);
@@ -215,7 +249,8 @@ CREATE INDEX idx_events_start ON events(start_date);
 CREATE INDEX idx_expatt_exp ON experiment_attachments(experiment_id);
 CREATE INDEX idx_files_folder ON files(folder_id);
 CREATE INDEX idx_folders_parent ON file_folders(parent_id);
-CREATE INDEX idx_goals_month ON goals(month);
+CREATE INDEX idx_goals_period ON goals(period);
+CREATE INDEX idx_goal_items_goal ON goal_items(goal_id);
 CREATE INDEX idx_habitlog_date ON habit_log(date);
 CREATE INDEX idx_habitlog_habit ON habit_log(habit_id);
 CREATE INDEX idx_links_source ON links(source_type, source_id);
@@ -227,3 +262,4 @@ CREATE INDEX idx_tasks_status ON tasks(status);
 CREATE INDEX idx_watchlist_category ON watchlist_items(category);
 CREATE INDEX idx_watchlist_kind ON watchlist_items(kind);
 CREATE INDEX idx_watchlist_status ON watchlist_items(status);
+CREATE INDEX idx_watchlist_bucket ON watchlist_items(bucket);

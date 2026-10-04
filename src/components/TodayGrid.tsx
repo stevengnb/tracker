@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { TODAY_CARDS, useSettings } from "@/lib/settings";
+import { TODAY_CARDS, TODAY_WIDE_CARDS, useSettings } from "@/lib/settings";
 
 // Arranges the Today dashboard cards per the user's order/hidden preferences.
 export function TodayGrid({ cards }: { cards: Record<string, ReactNode> }) {
@@ -21,7 +21,10 @@ export function TodayGrid({ cards }: { cards: Record<string, ReactNode> }) {
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       {visible.map((k) => (
-        <div key={k} className="min-w-0">
+        <div
+          key={k}
+          className={`min-w-0 ${TODAY_WIDE_CARDS.has(k) ? "lg:col-span-2" : ""}`}
+        >
           {cards[k]}
         </div>
       ))}

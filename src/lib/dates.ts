@@ -72,6 +72,17 @@ export function monthLabel(month: string): string {
   });
 }
 
+// Goals are organised per quarter: period = 'YYYY-Q1'..'YYYY-Q4'.
+export function currentQuarter(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`;
+}
+
+export function quarterLabel(period: string): string {
+  const m = /^(\d{4})-Q([1-4])$/.exec(period);
+  return m ? `Q${m[2]} ${m[1]}` : period;
+}
+
 // Shift a "YYYY-MM" month by delta months.
 export function monthShift(month: string, delta: number): string {
   const [y, m] = month.split("-").map(Number);

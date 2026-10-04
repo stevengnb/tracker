@@ -73,12 +73,23 @@ export const EVENT_COLORS = [
 export type Goal = {
   id: number;
   title: string;
-  month: string;
+  period: string; // 'YYYY-Q1'..'YYYY-Q4'
   description: string | null;
   status: "active" | "done" | "abandoned";
+  kind: "target" | "checklist";
   target_value: number | null;
   current_value: number;
   unit: string | null;
+  reward: string | null; // optional "treat yourself" note when the goal is met
+  created_at: string;
+};
+
+export type GoalItem = {
+  id: number;
+  goal_id: number;
+  label: string;
+  done: 0 | 1;
+  position: number;
   created_at: string;
 };
 
@@ -100,6 +111,8 @@ export type Habit = {
   created_at: string;
 };
 
+export type QueueBucket = "queue" | "entertainment";
+
 export type WatchlistItem = {
   id: number;
   title: string;
@@ -109,18 +122,32 @@ export type WatchlistItem = {
   subcategory: string | null;
   status: "to-watch" | "watched" | "to-read" | "read" | "dropped";
   notes: string | null;
+  bucket: QueueBucket;
   created_at: string;
 };
 
-// Categories per queue kind. First value is the add-form default.
-export const QUEUE_CATEGORIES: Record<"watch" | "read", string[]> = {
-  watch: ["youtube", "anime", "general", "channel"],
-  read: ["article", "github", "docs", "thread", "topic"],
+// Categories per bucket + kind. First value is the add-form default. Kept as a
+// plain map (the DB column is free-text, no CHECK) so adding a category is a
+// one-line change here with no migration.
+export const QUEUE_CATEGORIES: Record<
+  QueueBucket,
+  Record<"watch" | "read", string[]>
+> = {
+  queue: {
+    watch: ["youtube", "general", "channel"],
+    read: ["article", "github", "docs", "thread", "topic"],
+  },
+  entertainment: {
+    watch: ["anime", "movie", "series", "general"],
+    read: ["book", "manga", "comic"],
+  },
 };
 
 export const QUEUE_CATEGORY_LABELS: Record<string, string> = {
   youtube: "YouTube",
   anime: "Anime",
+  movie: "Movies",
+  series: "Series",
   general: "General",
   channel: "Channels",
   article: "Articles",
@@ -128,6 +155,9 @@ export const QUEUE_CATEGORY_LABELS: Record<string, string> = {
   docs: "Docs",
   thread: "Threads",
   topic: "Topics",
+  book: "Books",
+  manga: "Manga",
+  comic: "Comics",
 };
 
 export type Experiment = {
@@ -201,6 +231,7 @@ export type Guide = {
   category: string;
   content: string; // markdown
   pinned: number; // 0 | 1
+  archived: number; // 0 | 1
   created_at: string;
   updated_at: string;
 };

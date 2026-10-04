@@ -1,6 +1,11 @@
 import Link from "next/link";
-import { currentMonth, monthLabel } from "@/lib/dates";
-import { getGoalAttachments, getGoalMonths, getGoals } from "@/lib/queries";
+import { currentQuarter, quarterLabel } from "@/lib/dates";
+import {
+  getGoalAttachments,
+  getGoalItems,
+  getGoalPeriods,
+  getGoals,
+} from "@/lib/queries";
 import { Empty, PageHeader } from "@/components/ui";
 import { AddGoal, GoalCard } from "@/components/goals";
 
@@ -9,36 +14,38 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Goals" };
 
 export default async function GoalsPage(props: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ period?: string }>;
 }) {
   const sp = await props.searchParams;
-  const month = sp.month ?? currentMonth();
-  const months = getGoalMonths();
-  if (!months.includes(month)) months.push(month);
-  months.sort();
-  const goals = getGoals(month);
-  const attachments = getGoalAttachments(goals.map((g) => g.id));
+  const period = sp.period ?? currentQuarter();
+  const periods = getGoalPeriods();
+  if (!periods.includes(period)) periods.push(period);
+  periods.sort();
+  const goals = getGoals(period);
+  const ids = goals.map((g) => g.id);
+  const attachments = getGoalAttachments(ids);
+  const items = getGoalItems(ids);
 
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title="Goals"
-        subtitle="Monthly objectives and progress."
-        action={<AddGoal month={month} />}
+        subtitle="Quarterly objectives — targets and checklists."
+        action={<AddGoal period={period} />}
       />
 
       <div className="mb-5 flex flex-wrap gap-1.5">
-        {months.map((m) => (
+        {periods.map((p) => (
           <Link
-            key={m}
-            href={`/goals?month=${m}`}
+            key={p}
+            href={`/goals?period=${p}`}
             className={`rounded-full px-3 py-1 text-[12px] transition-colors ${
-              m === month
+              p === period
                 ? "bg-accent-soft font-medium text-accent"
                 : "text-muted hover:bg-line/60"
             }`}
           >
-            {monthLabel(m)}
+            {quarterLabel(p)}
           </Link>
         ))}
       </div>
@@ -49,9 +56,10 @@ export default async function GoalsPage(props: {
             key={g.id}
             goal={g}
             attachments={attachments.filter((a) => a.goal_id === g.id)}
+            items={items.filter((i) => i.goal_id === g.id)}
           />
         ))}
-        {!goals.length && <Empty>No goals for this month yet.</Empty>}
+        {!goals.length && <Empty>No goals for this quarter yet.</Empty>}
       </div>
     </div>
   );

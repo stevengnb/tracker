@@ -1,57 +1,77 @@
 import { useEffect, useState } from "react";
+import { toast } from "./toast";
 
-// User UI preferences, persisted client-side (per-browser). Hiding a section
+// User UI preferences, shared across devices: the source of truth is the
+// `app_settings` row (via /api/settings); localStorage is only a cache so the
+// first paint uses your settings instead of the defaults. Hiding a section
 // only affects nav/layout — it never touches the underlying data.
-export type Settings = {
-  clocks: string[]; // exactly two IANA timezones for the header clock
-  clock24h: boolean; // 24-hour vs 12-hour clock
-  weekStart: number; // 0 = Sunday, 1 = Monday
-  calShowTasks: boolean; // overlay task due-dates on the calendar
-  calShowHabits: boolean; // overlay habit markers on the calendar
-  sidebarOrder: string[]; // nav hrefs, in display order ([] = default)
-  sidebarHidden: string[]; // nav hrefs hidden from the sidebar
-  todayOrder: string[]; // Today card keys, in display order
-  todayHidden: string[]; // Today card keys hidden
-};
-
-export const DEFAULT_SETTINGS: Settings = {
-  clocks: ["Asia/Jakarta", "Asia/Seoul"],
-  clock24h: true,
-  weekStart: 0,
-  calShowTasks: true,
-  calShowHabits: true,
-  sidebarOrder: [],
-  sidebarHidden: [],
-  todayOrder: [],
-  todayHidden: [],
-};
+export {
+  DEFAULT_SETTINGS,
+  normalizeSettings,
+  type Settings,
+} from "./settingsCore";
+import { DEFAULT_SETTINGS, normalizeSettings, type Settings } from "./settingsCore";
 
 const KEY = "portal-settings";
 
-export function loadSettings(): Settings {
-  if (typeof window === "undefined") return DEFAULT_SETTINGS;
+function readCache(): Settings | null {
   try {
-    const p = JSON.parse(localStorage.getItem(KEY) ?? "{}");
-    return {
-      ...DEFAULT_SETTINGS,
-      ...p,
-      clocks:
-        Array.isArray(p.clocks) && p.clocks.length === 2
-          ? p.clocks
-          : DEFAULT_SETTINGS.clocks,
-      sidebarOrder: Array.isArray(p.sidebarOrder) ? p.sidebarOrder : [],
-      sidebarHidden: Array.isArray(p.sidebarHidden) ? p.sidebarHidden : [],
-      todayOrder: Array.isArray(p.todayOrder) ? p.todayOrder : [],
-      todayHidden: Array.isArray(p.todayHidden) ? p.todayHidden : [],
-    };
+    const raw = localStorage.getItem(KEY);
+    return raw ? normalizeSettings(JSON.parse(raw)) : null;
   } catch {
-    return DEFAULT_SETTINGS;
+    return null;
   }
 }
 
-export function saveSettings(s: Settings) {
-  localStorage.setItem(KEY, JSON.stringify(s));
+function writeCache(s: Settings) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(s));
+  } catch {}
   window.dispatchEvent(new Event("settings:changed"));
+}
+
+export function loadSettings(): Settings {
+  if (typeof window === "undefined") return DEFAULT_SETTINGS;
+  return readCache() ?? DEFAULT_SETTINGS;
+}
+
+function pushToServer(s: Settings) {
+  return fetch("/api/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(s),
+  })
+    .then((r) => r.json())
+    .then((d) => {
+      if (!d.ok) throw new Error(d.error);
+    });
+}
+
+export function saveSettings(s: Settings) {
+  writeCache(s);
+  pushToServer(s).catch((e) =>
+    toast(`Settings not synced: ${e instanceof Error ? e.message : e}`),
+  );
+}
+
+// Pull the shared settings once per page load. If the server has none yet,
+// seed it from this browser's existing (pre-sync) settings so nothing is lost.
+let pulled: Promise<void> | null = null;
+function pullFromServer() {
+  pulled ??= fetch("/api/settings")
+    .then((r) => r.json())
+    .then((d) => {
+      if (!d.ok) return;
+      if (d.settings) writeCache(normalizeSettings(d.settings));
+      else {
+        const local = readCache();
+        if (local) return pushToServer(local);
+      }
+    })
+    .catch(() => {
+      pulled = null; // offline/transient — retry on the next mount
+    });
+  return pulled;
 }
 
 // Reactive settings for client components; `ready` is false until mounted
@@ -63,6 +83,7 @@ export function useSettings(): [Settings, boolean] {
     const sync = () => setSettings(loadSettings());
     sync();
     setReady(true);
+    pullFromServer();
     window.addEventListener("settings:changed", sync);
     window.addEventListener("storage", sync); // cross-tab
     return () => {
@@ -107,5 +128,9 @@ export const TODAY_CARDS: { key: string; label: string }[] = [
   { key: "pins", label: "Pinned links" },
   { key: "events", label: "Today's events" },
   { key: "habits", label: "Habits today" },
-  { key: "goals", label: "Goals this month" },
+  { key: "goals", label: "Goals this quarter" },
+  { key: "challenge", label: "Today's challenge" },
 ];
+
+// Cards that span the full width of the Today grid on large screens.
+export const TODAY_WIDE_CARDS = new Set(["tasks"]);

@@ -6,6 +6,8 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
+  Archive,
+  ArchiveRestore,
   Check,
   ChevronDown,
   ChevronRight,
@@ -14,6 +16,7 @@ import {
   Pin,
   PinOff,
   Plus,
+  ScrollText,
   Trash2,
   X,
 } from "lucide-react";
@@ -110,6 +113,7 @@ export function GuidesBrowser({
   openId: number | null;
 }) {
   const [filter, setFilter] = useState<string>("all");
+  const [view, setView] = useState<"active" | "archived">("active");
   const [creating, setCreating] = useState(false);
   const [expanded, setExpanded] = useState<Set<number>>(
     () => new Set(openId != null ? [openId] : []),
@@ -123,8 +127,21 @@ export function GuidesBrowser({
       return next;
     });
 
+  const active = guides.filter((g) => g.archived !== 1);
+  const archived = guides.filter((g) => g.archived === 1);
+  const pool = view === "archived" ? archived : active;
+  // Category pills reflect only what's present in the current view.
+  const viewCats = [...new Set(pool.map((g) => g.category))].sort((a, b) =>
+    a.toLowerCase().localeCompare(b.toLowerCase()),
+  );
   const shown =
-    filter === "all" ? guides : guides.filter((g) => g.category === filter);
+    filter === "all" ? pool : pool.filter((g) => g.category === filter);
+
+  const switchView = (v: "active" | "archived") => {
+    setView(v);
+    setFilter("all");
+    setCreating(false);
+  };
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -132,6 +149,7 @@ export function GuidesBrowser({
         title="Guides"
         subtitle="Your rules, checklists, and how-tos — in one place."
         action={
+          view === "active" &&
           !creating && (
             <button
               onClick={() => setCreating(true)}
@@ -143,9 +161,38 @@ export function GuidesBrowser({
         }
       />
 
-      {categories.length > 0 && (
+      {/* Active / Archive switch — a segmented control, deliberately styled
+          differently from the category pills below so the archive reads as a
+          separate section rather than just another filter. */}
+      <div className="mb-4 flex w-fit gap-1 rounded-lg border border-line bg-card p-1">
+        {(
+          [
+            ["active", "Guides", active.length, ScrollText],
+            ["archived", "Archive", archived.length, Archive],
+          ] as const
+        ).map(([v, label, count, Icon]) => (
+          <button
+            key={v}
+            onClick={() => switchView(v)}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
+              view === v ? "bg-accent text-white" : "text-muted hover:text-text"
+            }`}
+          >
+            <Icon className="size-3.5" /> {label}
+            <span
+              className={`ml-0.5 rounded-full px-1.5 text-[11px] tabular-nums ${
+                view === v ? "bg-white/25" : "bg-line/60 text-muted"
+              }`}
+            >
+              {count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {viewCats.length > 0 && (
         <div className="mb-5 flex flex-wrap gap-1.5">
-          {["all", ...categories].map((c) => (
+          {["all", ...viewCats].map((c) => (
             <button
               key={c}
               onClick={() => setFilter(c)}
@@ -161,7 +208,7 @@ export function GuidesBrowser({
         </div>
       )}
 
-      {creating && (
+      {creating && view === "active" && (
         <div className="mb-3">
           <GuideForm
             categories={categories}
@@ -183,9 +230,13 @@ export function GuidesBrowser({
         ))}
         {!shown.length && !creating && (
           <Empty>
-            {guides.length
-              ? "No guides in this category."
-              : "No guides yet. Add one with New guide."}
+            {view === "archived"
+              ? archived.length
+                ? "No archived guides in this category."
+                : "Nothing archived yet."
+              : active.length
+                ? "No guides in this category."
+                : "No guides yet. Add one with New guide."}
           </Empty>
         )}
       </div>
@@ -214,18 +265,22 @@ function GuideCard({
       router.refresh();
     });
 
-  const remove = () =>
+  // Confirm OUTSIDE the transition: awaiting a user-interaction dialog inside
+  // startTransition keeps isPending true (the row greys out) and blocks React
+  // from committing the post-refresh tree, so the deleted row never leaves.
+  const remove = async () => {
+    const okDel = await confirmDialog({
+      title: "Delete guide",
+      message: `Delete “${guide.title}”? This can't be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!okDel) return;
     start(async () => {
-      const okDel = await confirmDialog({
-        title: "Delete guide",
-        message: `Delete “${guide.title}”? This can't be undone.`,
-        confirmLabel: "Delete",
-        danger: true,
-      });
-      if (!okDel) return;
       await api(`/api/guides/${guide.id}`, { method: "DELETE" });
       router.refresh();
     });
+  };
 
   if (editing) {
     return (
@@ -275,6 +330,17 @@ function GuideCard({
               <PinOff className="size-3.5" />
             ) : (
               <Pin className="size-3.5" />
+            )}
+          </button>
+          <button
+            onClick={() => patch({ archived: guide.archived === 1 ? 0 : 1 })}
+            title={guide.archived === 1 ? "Unarchive" : "Archive"}
+            className="text-faint transition-colors hover:text-accent"
+          >
+            {guide.archived === 1 ? (
+              <ArchiveRestore className="size-3.5" />
+            ) : (
+              <Archive className="size-3.5" />
             )}
           </button>
           <button

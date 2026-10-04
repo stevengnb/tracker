@@ -2,9 +2,9 @@ import { QueueView } from "@/components/QueueView";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Queue" };
+export const metadata = { title: "Entertainment" };
 
-export default async function QueuePage(props: {
+export default async function EntertainmentPage(props: {
   searchParams: Promise<{
     kind?: string;
     category?: string;
@@ -15,10 +15,10 @@ export default async function QueuePage(props: {
   const sp = await props.searchParams;
   return (
     <QueueView
-      bucket="queue"
-      basePath="/queue"
-      title="Queue"
-      subtitle="Productive things to watch and read later."
+      bucket="entertainment"
+      basePath="/entertainment"
+      title="Entertainment"
+      subtitle="Anime, movies, series and books to watch and read."
       sp={sp}
     />
   );

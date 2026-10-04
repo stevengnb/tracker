@@ -1,6 +1,6 @@
 import { getDb } from "./db";
 import { addDays, todayStr } from "./dates";
-import { allFiles, buildTree } from "./vault";
+import { allFiles, buildTree, readVaultFile, stripFrontmatter } from "./vault";
 import { TASK_CATEGORIES } from "./types";
 import type {
   Attempt,
@@ -13,6 +13,7 @@ import type {
   FileItem,
   Goal,
   GoalAttachment,
+  GoalItem,
   Guide,
   Habit,
   PinnedLink,
@@ -210,18 +211,28 @@ export function getTaskCategories(): string[] {
 
 // ── Goals ───────────────────────────────────────────────────
 
-export function getGoalMonths(): string[] {
+export function getGoalPeriods(): string[] {
   return (
     getDb()
-      .prepare("SELECT DISTINCT month FROM goals ORDER BY month")
-      .all() as { month: string }[]
-  ).map((r) => r.month);
+      .prepare("SELECT DISTINCT period FROM goals ORDER BY period")
+      .all() as { period: string }[]
+  ).map((r) => r.period);
 }
 
-export function getGoals(month: string): Goal[] {
+export function getGoals(period: string): Goal[] {
   return getDb()
-    .prepare("SELECT * FROM goals WHERE month = ? ORDER BY created_at")
-    .all(month) as Goal[];
+    .prepare("SELECT * FROM goals WHERE period = ? ORDER BY created_at")
+    .all(period) as Goal[];
+}
+
+export function getGoalItems(goalIds: number[]): GoalItem[] {
+  if (goalIds.length === 0) return [];
+  const marks = goalIds.map(() => "?").join(",");
+  return getDb()
+    .prepare(
+      `SELECT * FROM goal_items WHERE goal_id IN (${marks}) ORDER BY position, id`,
+    )
+    .all(...goalIds) as GoalItem[];
 }
 
 export function getGoalAttachments(goalIds: number[]): GoalAttachment[] {
@@ -317,9 +328,14 @@ export function getWatchlist(filters?: {
   kind?: string;
   category?: string;
   status?: string;
+  bucket?: string;
 }): WatchlistItem[] {
   const where: string[] = [];
   const params: string[] = [];
+  if (filters?.bucket) {
+    where.push("bucket = ?");
+    params.push(filters.bucket);
+  }
   if (filters?.kind) {
     where.push("kind = ?");
     params.push(filters.kind);
@@ -488,21 +504,22 @@ export function globalSearch(q: string): SearchResult[] {
     out.push({ type: "Experiment", title: r.title, href: "/experiments" });
 
   for (const r of rows(
-    "SELECT title, month FROM goals WHERE title LIKE ? ESCAPE '\\' LIMIT 5",
+    "SELECT title, period FROM goals WHERE title LIKE ? ESCAPE '\\' LIMIT 5",
   ))
-    out.push({ type: "Goal", title: r.title, subtitle: r.month, href: "/goals" });
+    out.push({ type: "Goal", title: r.title, subtitle: r.period, href: "/goals" });
 
   for (const r of rows(
-    "SELECT id, title, category, kind FROM watchlist_items WHERE title LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 5",
+    "SELECT id, title, category, kind, bucket FROM watchlist_items WHERE title LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 5",
   ))
     // Anchor to the item itself (?item=id) rather than a status-filtered list:
     // the queue page shows all statuses when item is set, so the link never
-    // goes stale when the item is later marked read/watched.
+    // goes stale when the item is later marked read/watched. Route to the tab
+    // that owns the item's bucket.
     out.push({
-      type: "Queue",
+      type: r.bucket === "entertainment" ? "Entertainment" : "Queue",
       title: r.title,
       subtitle: r.category,
-      href: `/queue?kind=${r.kind}&item=${r.id}`,
+      href: `${r.bucket === "entertainment" ? "/entertainment" : "/queue"}?kind=${r.kind}&item=${r.id}`,
     });
 
   for (const r of rows(
@@ -525,13 +542,30 @@ export function globalSearch(q: string): SearchResult[] {
       href: `/challenge/${r.id}`,
     });
 
-  for (const r of rows(
-    "SELECT id, title, category FROM guides WHERE title LIKE ? ESCAPE '\\' ORDER BY pinned DESC, id DESC LIMIT 5",
-  ))
+  // ~70-char excerpt around the first match, for body-text hits.
+  const lower = term.toLowerCase();
+  const snippet = (text: string) => {
+    const i = text.toLowerCase().indexOf(lower);
+    const from = Math.max(0, i - 20);
+    return (
+      (from > 0 ? "…" : "") +
+      text.slice(from, from + 70).replace(/\s+/g, " ").trim()
+    );
+  };
+
+  // Guides match on body text too; title hits rank first.
+  for (const r of db
+    .prepare(
+      `SELECT id, title, category, content, title LIKE @like ESCAPE '\\' AS in_title
+       FROM guides WHERE archived = 0
+         AND (title LIKE @like ESCAPE '\\' OR content LIKE @like ESCAPE '\\')
+       ORDER BY in_title DESC, pinned DESC, id DESC LIMIT 5`,
+    )
+    .all({ like }) as Record<string, string>[])
     out.push({
       type: "Guide",
       title: r.title,
-      subtitle: r.category,
+      subtitle: r.in_title ? r.category : snippet(r.content),
       href: `/guides?id=${r.id}`,
     });
 
@@ -540,18 +574,13 @@ export function globalSearch(q: string): SearchResult[] {
   // `distraction:open` event for these instead of navigating.
   for (const r of rows(
     "SELECT date, content FROM daily_notes WHERE content LIKE ? ESCAPE '\\' ORDER BY date DESC LIMIT 5",
-  )) {
-    const i = r.content.toLowerCase().indexOf(term.toLowerCase());
-    const from = Math.max(0, i - 20);
+  ))
     out.push({
       type: "Note",
       title: r.date,
-      subtitle:
-        (from > 0 ? "…" : "") +
-        r.content.slice(from, from + 70).replace(/\s+/g, " ").trim(),
+      subtitle: snippet(r.content),
       href: `note:${r.date}`,
     });
-  }
 
   // Pins match on the URL too, so "cloudflare" finds the dashboard pin even
   // when its title doesn't say so. href is the external URL, not a route.
@@ -569,16 +598,28 @@ export function globalSearch(q: string): SearchResult[] {
       href: r.url,
     });
 
-  const lower = term.toLowerCase();
-  for (const p of allFiles(buildTree())
-    .filter((f) => f.toLowerCase().includes(lower))
-    .slice(0, 5))
-    out.push({
-      type: "Wiki",
-      title: (p.split("/").pop() ?? p).replace(/\.md$/i, ""),
-      subtitle: p,
-      href: `/wiki?path=${encodeURIComponent(p)}`,
-    });
+  // Wiki: filename hits first, then pages whose text mentions the term (the
+  // vault is a few hundred small files, so a scan per search is cheap).
+  const wikiFiles = allFiles(buildTree());
+  const wikiHits: SearchResult[] = [];
+  const wikiResult = (p: string, subtitle: string): SearchResult => ({
+    type: "Wiki",
+    title: (p.split("/").pop() ?? p).replace(/\.md$/i, ""),
+    subtitle,
+    href: `/wiki?path=${encodeURIComponent(p)}`,
+  });
+  for (const p of wikiFiles) {
+    if (wikiHits.length >= 5) break;
+    if (p.toLowerCase().includes(lower)) wikiHits.push(wikiResult(p, p));
+  }
+  for (const p of wikiFiles) {
+    if (wikiHits.length >= 5) break;
+    if (p.toLowerCase().includes(lower)) continue;
+    const body = readVaultFile(p);
+    if (body && body.toLowerCase().includes(lower))
+      wikiHits.push(wikiResult(p, snippet(stripFrontmatter(body))));
+  }
+  out.push(...wikiHits);
 
   return out;
 }
@@ -609,7 +650,7 @@ export function getPinCategories(): string[] {
 export function getGuides(): Guide[] {
   return getDb()
     .prepare(
-      `SELECT id, title, category, content, pinned, created_at, updated_at
+      `SELECT id, title, category, content, pinned, archived, created_at, updated_at
        FROM guides ORDER BY pinned DESC, category COLLATE NOCASE, title COLLATE NOCASE`,
     )
     .all() as Guide[];
@@ -756,4 +797,24 @@ export function getQuizStats(): Record<string, QuizStat> {
       lastAt: r.lastAt,
     };
   return out;
+}
+
+// ── Settings (UI preferences, shared across devices) ────────
+
+/** The stored settings JSON, or null if none has been saved yet. */
+export function getSettingsJson(): string | null {
+  const row = getDb()
+    .prepare("SELECT data FROM app_settings WHERE id = 1")
+    .get() as { data: string } | undefined;
+  return row?.data ?? null;
+}
+
+export function saveSettingsJson(data: string) {
+  getDb()
+    .prepare(
+      `INSERT INTO app_settings (id, data) VALUES (1, ?)
+       ON CONFLICT(id) DO UPDATE SET data = excluded.data,
+         updated_at = CURRENT_TIMESTAMP`,
+    )
+    .run(data);
 }

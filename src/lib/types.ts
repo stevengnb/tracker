@@ -57,6 +57,7 @@ export type EventItem = {
   end_time: string | null;
   color: string | null;
   recur: string | null; // null | "daily" | "weekly" | "monthly"
+  recur_until: string | null; // YYYY-MM-DD; last day a recurring event may occur
   created_at: string;
 };
 

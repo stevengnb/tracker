@@ -19,6 +19,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       "end_time",
       "color",
       "recur",
+      "recur_until",
     ]) {
       if (key in body) {
         const v = typeof body[key] === "string" ? body[key].trim() : body[key];

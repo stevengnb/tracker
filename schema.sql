@@ -47,7 +47,7 @@ CREATE TABLE events (
   end_time TEXT,
   color TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-, recur TEXT);
+, recur TEXT, recur_until DATE);
 
 CREATE TABLE experiment_attachments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

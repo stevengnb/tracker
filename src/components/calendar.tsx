@@ -34,6 +34,7 @@ function weekday(iso: string) {
 function occursOn(e: EventItem, day: string): boolean {
   if (day < e.start_date) return false;
   if (!e.recur) return day <= (e.end_date ?? e.start_date);
+  if (e.recur_until && day > e.recur_until) return false;
   if (e.recur === "daily") return true;
   if (e.recur === "weekly") return weekday(day) === weekday(e.start_date);
   if (e.recur === "monthly") return day.slice(8) === e.start_date.slice(8);
@@ -270,6 +271,7 @@ function EventModal({
   const [endTime, setEndTime] = useState(event?.end_time ?? "");
   const [color, setColor] = useState(event?.color ?? EVENT_COLORS[0]);
   const [recur, setRecur] = useState(event?.recur ?? "");
+  const [recurUntil, setRecurUntil] = useState(event?.recur_until ?? "");
   const [pending, start] = useTransition();
   const mounted = useMounted();
 
@@ -295,6 +297,8 @@ function EventModal({
       end_time: allDay ? "" : endTime,
       color,
       recur,
+      // Only persist an end date when the event actually repeats.
+      recur_until: recur && recurUntil >= startDate ? recurUntil : "",
     };
     start(async () => {
       await api(isEdit ? `/api/events/${event!.id}` : "/api/events", {
@@ -438,6 +442,21 @@ function EventModal({
             ]}
           />
         </div>
+
+        {recur && (
+          <div className="mb-2">
+            <span className="mb-1 block text-[11px] text-faint">
+              Repeat until (optional)
+            </span>
+            <input
+              type="date"
+              value={recurUntil}
+              min={startDate}
+              onChange={(e) => setRecurUntil(e.target.value)}
+              className={field}
+            />
+          </div>
+        )}
 
         <textarea
           value={desc}

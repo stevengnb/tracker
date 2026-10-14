@@ -690,10 +690,10 @@ export function getEventsInRange(start: string, end: string): EventItem[] {
     .prepare(
       `SELECT * FROM events
        WHERE (recur IS NULL AND start_date <= ? AND COALESCE(end_date, start_date) >= ?)
-          OR (recur IS NOT NULL AND start_date <= ?)
+          OR (recur IS NOT NULL AND start_date <= ? AND (recur_until IS NULL OR recur_until >= ?))
        ORDER BY start_date, COALESCE(start_time, '00:00'), id`,
     )
-    .all(end, start, end) as EventItem[];
+    .all(end, start, end, start) as EventItem[];
 }
 
 /** Events occurring on a specific day (recurrence-aware) — for the Today card. */
@@ -703,6 +703,7 @@ export function getEventsForDay(date: string): EventItem[] {
   return getEventsInRange(date, date).filter((e) => {
     if (date < e.start_date) return false;
     if (!e.recur) return date <= (e.end_date ?? e.start_date);
+    if (e.recur_until && date > e.recur_until) return false;
     if (e.recur === "daily") return true;
     if (e.recur === "weekly")
       return new Date(e.start_date + "T12:00:00").getDay() === wd;

@@ -24,11 +24,13 @@ export async function POST(req: NextRequest) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate))
     return fail("start_date (YYYY-MM-DD) is required");
   const endDate = (body.end_date ?? "").trim() || null;
+  const recur = (body.recur ?? "").trim() || null;
+  const recurUntil = (body.recur_until ?? "").trim() || null;
   try {
     const info = getDb()
       .prepare(
-        `INSERT INTO events (title, description, start_date, end_date, start_time, end_time, color, recur)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO events (title, description, start_date, end_date, start_time, end_time, color, recur, recur_until)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         title,
@@ -38,7 +40,9 @@ export async function POST(req: NextRequest) {
         (body.start_time ?? "").trim() || null,
         (body.end_time ?? "").trim() || null,
         (body.color ?? "").trim() || null,
-        (body.recur ?? "").trim() || null,
+        recur,
+        // recur_until only applies to recurring events, and must be >= start
+        recur && recurUntil && recurUntil >= startDate ? recurUntil : null,
       );
     return ok({ id: info.lastInsertRowid });
   } catch (e) {
